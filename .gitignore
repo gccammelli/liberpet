@@ -13,3 +13,6 @@ CLAUDE.md
 iosApp/**/xcuserdata/
 *.ipa
 Payload/
+
+# Python
+__pycache__/
