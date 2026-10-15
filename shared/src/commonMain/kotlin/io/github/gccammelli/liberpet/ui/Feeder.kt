@@ -115,6 +115,7 @@ fun FeederScreen(d: Device, st: UiState) {
                 Gap(16.dp)
                 PetsLinked(d, st)
                 Gap(12.dp)
+                CatsCard(d)
                 Card(padding = PaddingValues(vertical = 22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BigStat(fmt(d.num("today_feeding_quantity_weight") ?: 0.0), "g", "Today's Feeding Amount", Modifier.weight(1f))

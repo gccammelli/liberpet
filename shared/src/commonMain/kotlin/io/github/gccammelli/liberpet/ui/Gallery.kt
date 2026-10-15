@@ -56,6 +56,7 @@ import io.github.gccammelli.liberpet.Device
 import io.github.gccammelli.liberpet.Repo
 import io.github.gccammelli.liberpet.UiState
 import io.github.gccammelli.liberpet.VideoPlayer
+import io.github.gccammelli.liberpet.cats
 import io.github.gccammelli.liberpet.clips
 import io.github.gccammelli.liberpet.local
 import io.github.gccammelli.liberpet.pad
@@ -80,6 +81,8 @@ fun GalleryScreen(d: Device, st: UiState) {
     var day by remember { mutableStateOf<String?>(null) }
     var clips by remember(day) { mutableStateOf<List<Clip>?>(null) }
     var folder by remember { mutableStateOf<String?>(null) }
+    var cats by remember { mutableStateOf<io.github.gccammelli.liberpet.Cats?>(null) }
+    LaunchedEffect(Unit) { cats = runCatching { Repo.ha!!.cats() }.getOrNull() }
     LaunchedEffect(Unit) {
         runCatching {
             val f = Repo.ha!!.recordingsFolder() ?: error("no recordings folder")
@@ -114,7 +117,7 @@ fun GalleryScreen(d: Device, st: UiState) {
                             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = C.Green) }
                         }
                         clips!!.isEmpty() -> item(span = { GridItemSpan(2) }) { T("No clips on this day", 15.sp, C.Sub, modifier = Modifier.padding(24.dp)) }
-                        else -> items(clips!!) { c -> ClipCard(c) { Nav.go(Screen.Clip(d.serial, c.video, "${dayChip(c.day)} · ${c.time.take(5)}")) } }
+                        else -> items(clips!!) { c -> ClipCard(c, whoAte(c, cats, st)) { Nav.go(Screen.Clip(d.serial, c.video, "${dayChip(c.day)} · ${c.time.take(5)}")) } }
                     }
                 }
             }
@@ -164,7 +167,7 @@ private fun DayTimeline(clips: List<Clip>, feedMinutes: List<Int>) = Card(paddin
 }
 
 @Composable
-private fun ClipCard(c: Clip, onClick: () -> Unit) = Column(Modifier.clip(RoundedCornerShape(10.dp)).background(C.Card).clickable(onClick = onClick)) {
+private fun ClipCard(c: Clip, who: String?, onClick: () -> Unit) = Column(Modifier.clip(RoundedCornerShape(10.dp)).background(C.Card).clickable(onClick = onClick)) {
     Box(Modifier.fillMaxWidth().aspectRatio(16 / 9f).background(Color(0xFF1E1E1E))) {
         val img = rememberHaImage(c.thumb, 480)
         if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -177,7 +180,18 @@ private fun ClipCard(c: Clip, onClick: () -> Unit) = Column(Modifier.clip(Rounde
     Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         T(c.time.take(5), 15.sp, weight = FontWeight.Medium)
         Spacer(Modifier.width(6.dp))
-        T(c.reasons.mapNotNull { REASONS[it]?.second }.joinToString(" · "), 12.sp, C.Sub)
+        T(who ?: c.reasons.mapNotNull { REASONS[it]?.second }.joinToString(" · "), 12.sp, if (who != null) C.Green else C.Sub)
+    }
+}
+
+/** "Left: Name · Right: Name" from the recognizer, for clips it has named cats in. */
+private fun whoAte(c: Clip, cats: io.github.gccammelli.liberpet.Cats?, st: UiState): String? {
+    val sides = cats?.clips?.get("${c.day}/${c.video.substringAfterLast('/').removeSuffix(".mp4")}") ?: return null
+    fun name(id: String?) = id?.let { i -> st.home?.pets?.firstOrNull { it.id == i }?.name }
+    val l = name(sides["left"]); val r = name(sides["right"])
+    return when {
+        l != null && r != null -> if (l == r) l else "Left: $l · Right: $r"
+        else -> l ?: r
     }
 }
 

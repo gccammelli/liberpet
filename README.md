@@ -33,6 +33,7 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 - **Feeder:**
   - live camera, muted by default, with full screen; snapshots to your photos, and a record button (with the recorder)
   - recordings gallery (optional; clips by motion or feeding, from a capped folder outside Home Assistant)
+  - cat recognition (optional): you label a few photos, and it names who ate from each bowl in every clip, on your own machine ([tools/recognizer](tools/recognizer/README.md))
   - Feed Now
   - today's amount, feeding count and schedule, with today-only skips
   - schedule list, plus adding, editing, deleting and switching plans on or off

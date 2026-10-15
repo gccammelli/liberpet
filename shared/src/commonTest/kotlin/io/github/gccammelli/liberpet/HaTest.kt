@@ -132,4 +132,15 @@ class HaTest {
         assertEquals(null, clips[2].seconds) // older clips have no length in the name
         assertEquals("media-source://media_source/local/liberpet/2026-10-15/08-39-32_manual.mp4", clips[2].video)
     }
+
+    @Test
+    fun parsesTheRecognizerState() {
+        val c = parseCats("""{"entity_id":"sensor.liberpet_cats","state":"learning","attributes":{"accuracy":0.83,
+            "labels":{"petlibro-key-1":5,"none":2},"to_label":[{"id":"d_c_r014","path":"_learn/d_c_r014.jpg","side":"right","guess":null}],
+            "clips":{"2026-10-15/09-00-11_motion_151s":{"left":"petlibro-key-1","right":"petlibro-key-2"}}}}""")
+        assertEquals("learning", c.state); assertEquals(0.83, c.accuracy)
+        assertEquals(mapOf("petlibro-key-1" to 5, "none" to 2), c.labels)
+        assertEquals(LearnPhoto("d_c_r014", "_learn/d_c_r014.jpg", "right", null), c.toLabel.single())
+        assertEquals("petlibro-key-2", c.clips["2026-10-15/09-00-11_motion_151s"]?.get("right"))
+    }
 }

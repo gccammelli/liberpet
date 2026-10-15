@@ -311,3 +311,46 @@ suspend fun HaBackend.resolveMedia(id: String): String {
     val path = r?.s("url") ?: throw ApiException("Home Assistant couldn't open that recording")
     return if ("://" in path) path else base + path
 }
+
+// ---------- Cat recognition (tools/recognizer: learns from the user's labels which cat is at which bowl) ----------
+
+/** What the recognizer publishes; [LABEL_ENTITY] is how LiberPet sends it the user's answers. */
+const val CATS_SENSOR = "sensor.liberpet_cats"
+const val LABEL_ENTITY = "input_text.liberpet_label"
+const val NO_CAT = "none"
+
+/** A bowl picture to label: [path] inside the recordings folder, [side] "left"/"right", [guess] a pet id or null. */
+data class LearnPhoto(val id: String, val path: String, val side: String, val guess: String?)
+
+/**
+ * The recognizer's state: "waiting" (no clips yet), "learning" or "ready"; [labels] per pet id (and [NO_CAT]),
+ * [accuracy] how often it names labelled photos right, [clips] "YYYY-MM-DD/<clip name>" → side → pet id.
+ */
+data class Cats(val state: String, val accuracy: Double, val labels: Map<String, Int>, val toLabel: List<LearnPhoto>,
+                val clips: Map<String, Map<String, String>>)
+
+fun parseCats(text: String): Cats {
+    val o = json.parseToJsonElement(text).jsonObject
+    val a = o.o("attributes") ?: JsonObject(emptyMap())
+    fun obj(k: String) = a[k] as? JsonObject ?: JsonObject(emptyMap())
+    return Cats(
+        state = o.s("state") ?: "waiting",
+        accuracy = a.s("accuracy")?.toDoubleOrNull() ?: 0.0,
+        labels = obj("labels").mapValues { (it.value as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0 },
+        toLabel = (a["to_label"] as? JsonArray ?: JsonArray(emptyList())).mapNotNull { e ->
+            val x = e.jsonObject
+            LearnPhoto(x.s("id") ?: return@mapNotNull null, x.s("path") ?: return@mapNotNull null, x.s("side") ?: "left", x.s("guess"))
+        },
+        clips = obj("clips").mapValues { (_, v) -> (v as? JsonObject ?: JsonObject(emptyMap())).mapNotNull { (k, x) -> (x as? JsonPrimitive)?.contentOrNull?.let { k to it } }.toMap() },
+    )
+}
+
+/** The recognizer's state, or null if it isn't set up. */
+suspend fun HaBackend.cats(): Cats? = try { parseCats(get("/api/states/$CATS_SENSOR")) } catch (e: ApiException) { null }
+
+/** Sends one answer ([pet] a pet id or [NO_CAT]); false if the text helper doesn't exist in Home Assistant yet. */
+suspend fun HaBackend.label(photo: String, pet: String): Boolean {
+    try { get("/api/states/$LABEL_ENTITY") } catch (e: ApiException) { return false }
+    post("/api/services/input_text/set_value", buildJsonObject { put("entity_id", LABEL_ENTITY); put("value", "$photo=$pet") }.toString())
+    return true
+}
