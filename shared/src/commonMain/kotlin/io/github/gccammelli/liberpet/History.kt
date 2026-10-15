@@ -106,7 +106,7 @@ fun parseActivity(attrs: JsonObject): List<Activity> = attrs.a("records")?.mapNo
     )
 }.orEmpty()
 
-/** The sensor keeps the latest 50 records; its recorded states hold the older ones. Merged, newest first. */
+/** The sensor keeps the latest records (25); its recorded states hold the older ones. Merged, newest first. */
 suspend fun HaBackend.activity(id: String, current: JsonObject, days: Int): List<Activity> {
     val now = Clock.System.now()
     val past = runCatching {
