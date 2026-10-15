@@ -31,7 +31,7 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 
 - **Home:** every feeder and fountain, with problems flagged (filter or cleaning overdue, low water, offline).
 - **Feeder:**
-  - live camera, muted by default, with full screen
+  - live camera, muted by default, with full screen; snapshots to your photos, and a record button (with the recorder)
   - recordings gallery (optional; clips by motion or feeding, from a capped folder outside Home Assistant)
   - Feed Now
   - today's amount, feeding count and schedule, with today-only skips

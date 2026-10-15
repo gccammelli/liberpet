@@ -50,6 +50,21 @@ class MainActivity : ComponentActivity(), PlatformUi {
         pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
+    // shortcut: Android 10+ only (no storage permission needed there); older phones get an error toast.
+    override fun saveImage(jpeg: ByteArray, name: String, done: (Throwable?) -> Unit) {
+        val result = runCatching {
+            check(android.os.Build.VERSION.SDK_INT >= 29) { "needs Android 10 or later" }
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/LiberPet")
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+            contentResolver.openOutputStream(uri)!!.use { it.write(jpeg) }
+        }
+        done(result.exceptionOrNull())
+    }
+
     override fun setDarkBars(dark: Boolean) {
         val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(style, style)

@@ -34,6 +34,8 @@ interface PlatformUi {
     fun setDarkBars(dark: Boolean)
     /** Let the user pick a photo (system photo picker); [done] gets its bytes, or null if cancelled. */
     fun pickImage(done: (ByteArray?) -> Unit)
+    /** Saves a JPEG to the phone's photos; [done] gets null on success or the error. */
+    fun saveImage(jpeg: ByteArray, name: String, done: (Throwable?) -> Unit)
 }
 
 val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No platform provided") }

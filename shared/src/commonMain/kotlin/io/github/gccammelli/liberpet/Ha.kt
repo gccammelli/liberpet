@@ -245,6 +245,19 @@ suspend fun HaBackend.hlsUrl(cameraId: String): String {
     return if ("://" in path) path else base + path
 }
 
+/** A still from the camera, as JPEG (Home Assistant's camera proxy). */
+suspend fun HaBackend.snapshot(cameraId: String): ByteArray = bytes("/api/camera_proxy/$cameraId")
+
+/** The Home Assistant button the recorder watches: pressing it saves the last 10 s plus the next 30 (tools/recorder). */
+const val RECORD_BUTTON = "input_button.liberpet_record"
+
+/** Presses [RECORD_BUTTON]; false if that helper doesn't exist in Home Assistant yet. */
+suspend fun HaBackend.recordClip(): Boolean {
+    try { get("/api/states/$RECORD_BUTTON") } catch (e: ApiException) { return false } // 404: not set up
+    post("/api/services/input_button/press", """{"entity_id":"$RECORD_BUTTON"}""")
+    return true
+}
+
 // ---------- Recordings (the recorder's folder, shared to Home Assistant as network media storage) ----------
 
 /** Home Assistant media folder holding the recorder's clips (network storage named "liberpet", usage Media). */

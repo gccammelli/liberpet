@@ -98,6 +98,17 @@ private class IosPlatformUi : PlatformUi {
         UIApplication.sharedApplication.setStatusBarStyle(if (dark) UIStatusBarStyleLightContent else UIStatusBarStyleDarkContent, true)
 
     /** The system photo picker: no photo-library permission needed, the user hands over just the one picture. */
+    /** Adds the photo to the library (asks for "add photos" permission the first time). */
+    override fun saveImage(jpeg: ByteArray, name: String, done: (Throwable?) -> Unit) {
+        val data = jpeg.toNSData()
+        platform.Photos.PHPhotoLibrary.sharedPhotoLibrary().performChanges({
+            platform.Photos.PHAssetCreationRequest.creationRequestForAsset()
+                .addResourceWithType(platform.Photos.PHAssetResourceTypePhoto, data, null)
+        }) { ok, error ->
+            dispatch_async(dispatch_get_main_queue()) { done(if (ok) null else Exception(error?.localizedDescription ?: "Photos refused it")) }
+        }
+    }
+
     override fun pickImage(done: (ByteArray?) -> Unit) {
         val picker = PHPickerViewController(PHPickerConfiguration().apply { filter = PHPickerFilter.imagesFilter; selectionLimit = 1 })
         val delegate = object : NSObject(), PHPickerViewControllerDelegateProtocol {

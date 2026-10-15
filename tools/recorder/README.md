@@ -10,7 +10,10 @@ thing that triggered it:
 - **Feedings:** optional, from the PETLIBRO integration's *Recent Activity* sensor in Home Assistant. Its records
   carry the exact dispense time, so clips start before the dispense even though Home Assistant polls once a minute.
 - **Continuous:** everything, in 5-minute clips.
-- **Manual:** `kill -USR1 <pid>` saves the last pre-roll seconds plus the next 30.
+- **Manual:** LiberPet's record button (under the live view) saves the last pre-roll seconds plus the next 30. It presses
+  a Home Assistant button that the recorder watches, so the app still only talks to Home Assistant. Set it up once: in Home
+  Assistant, **Settings › Devices & services › Helpers › Create helper › Button**, named `LiberPet record` (entity
+  `input_button.liberpet_record`; another id goes in `record_button`). Without LiberPet: `kill -USR1 <pid>`.
 
 Each clip is saved as `YYYY-MM-DD/HH-MM-SS_<reasons>_<seconds>s.mp4`, with a `.jpg` thumbnail and a `.json` note.
 A clip is moved into place only when it's complete. When the folder grows past the cap, the oldest clips are

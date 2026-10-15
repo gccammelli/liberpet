@@ -9,7 +9,8 @@ before whatever triggered it. Triggers:
   - feedings: the PETLIBRO integration's "Recent Activity" sensor in Home Assistant (optional; its records carry the
     exact dispense time, so the buffer covers Home Assistant's polling delay);
   - continuous mode: everything, in 5-minute clips;
-  - manual: `kill -USR1 <pid>` saves the last pre-roll seconds plus the next 30.
+  - manual: LiberPet's record button (it presses the Home Assistant button "input_button.liberpet_record"), or
+    `kill -USR1 <pid>`: saves the last pre-roll seconds plus the next 30.
 Each clip is an MP4 with a JPG thumbnail and a JSON note. The folder is kept under a size cap, oldest clips first.
 
     python3 liberpet_recorder.py --config recorder.json
@@ -24,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +50,7 @@ DEFAULTS = {
     "ha_url": None,              # e.g. http://homeassistant.local:8123 (optional, for feed clips)
     "ha_token_file": None,       # file holding a long-lived access token
     "activity_entities": [],     # e.g. ["sensor.granary_camera_feeder_recent_activity"]
+    "record_button": "input_button.liberpet_record",  # LiberPet's record button; its state is the press time
 }
 
 
@@ -100,17 +103,35 @@ class Recorder:
             prev = frame
 
     def feed_loop(self):
-        url, entities = self.cfg["ha_url"], self.cfg["activity_entities"]
-        if not url or not entities or not self.cfg["ha_token_file"]:
+        url, entities, button = self.cfg["ha_url"], self.cfg["activity_entities"], self.cfg["record_button"]
+        if not url or not (entities or button) or not self.cfg["ha_token_file"]:
             return
         token = Path(self.cfg["ha_token_file"]).read_text().strip()
+
+        def state(ent):
+            req = urllib.request.Request(f"{url.rstrip('/')}/api/states/{ent}", headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.load(r)
+
         first = True
+        last_press = None
         while True:
+            if button:
+                try:
+                    pressed = state(button)["state"]  # ISO time of the last press
+                    if not first and pressed != last_press and pressed not in ("unknown", "unavailable"):
+                        t = datetime.fromisoformat(pressed).timestamp()
+                        if t > time.time() - self.cfg["buffer_s"] + self.cfg["pre_roll_s"]:
+                            self.trigger(t - self.cfg["pre_roll_s"], t + 30, "manual")
+                    last_press = pressed
+                except urllib.error.HTTPError as e:
+                    if e.code != 404:  # 404: no button set up, nothing to watch
+                        log("record button poll failed:", e)
+                except Exception as e:
+                    log("record button poll failed:", e)
             for ent in entities:
                 try:
-                    req = urllib.request.Request(f"{url.rstrip('/')}/api/states/{ent}", headers={"Authorization": f"Bearer {token}"})
-                    with urllib.request.urlopen(req, timeout=20) as r:
-                        records = json.load(r).get("attributes", {}).get("records", [])
+                    records = state(ent).get("attributes", {}).get("records", [])
                 except Exception as e:  # Home Assistant restarting etc.: try again next round
                     log("feed poll failed:", e)
                     continue
@@ -127,7 +148,7 @@ class Recorder:
                     if t > time.time() - self.cfg["buffer_s"] + self.cfg["pre_roll_s"]:
                         self.trigger(t - self.cfg["pre_roll_s"], t + self.cfg["feed_post_s"], "feed")
             first = False
-            time.sleep(20)
+            time.sleep(5 if button else 20)  # the record button wants a quicker answer; the buffer covers the wait
 
     # ---- clips ----
 

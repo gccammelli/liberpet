@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.text.style.TextAlign
 import io.github.gccammelli.liberpet.VideoPlayer
 import io.github.gccammelli.liberpet.hlsUrl
+import io.github.gccammelli.liberpet.recordClip
+import io.github.gccammelli.liberpet.snapshot
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -47,7 +49,6 @@ import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Videocam
@@ -79,6 +80,7 @@ import io.github.gccammelli.liberpet.LocalPlatform
 import io.github.gccammelli.liberpet.LogEntry
 import io.github.gccammelli.liberpet.Plan
 import io.github.gccammelli.liberpet.Repo
+import kotlinx.coroutines.launch
 import io.github.gccammelli.liberpet.UiState
 import io.github.gccammelli.liberpet.fmt
 import io.github.gccammelli.liberpet.gramsPerPortion
@@ -167,7 +169,23 @@ fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().backgrou
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf(Icons.Outlined.Videocam, Icons.Outlined.CameraAlt, Icons.Outlined.Mic).forEach { SmallIcon(it, C.Track, 30.dp) }
+        // Record and snapshot go through Home Assistant too; no mic: the camera's open-source stream has no talk-back.
+        val ctx = LocalPlatform.current; val scope = androidx.compose.runtime.rememberCoroutineScope()
+        val camOn = if (cam != null) C.Text else C.Track
+        Icon(Icons.Outlined.Videocam, "Record a clip", Modifier.size(30.dp).clickable(enabled = cam != null) {
+            scope.launch {
+                runCatching { Repo.ha!!.recordClip() }.fold(
+                    { ok -> ctx.toast(if (ok) "Recording: the last 10 s and the next 30 s will be in Recordings in a minute" else "To record, add a Home Assistant button named \"LiberPet record\" (see the recorder's guide)") },
+                    { ctx.toast("Couldn't start recording: ${it.message}") })
+            }
+        }, tint = camOn)
+        Icon(Icons.Outlined.CameraAlt, "Take a snapshot", Modifier.size(30.dp).clickable(enabled = cam != null) {
+            scope.launch {
+                runCatching { Repo.ha!!.snapshot(cam!!.id) }.onSuccess { jpeg ->
+                    ctx.saveImage(jpeg, "LiberPet " + Clock.System.now().local().toString().take(19).replace(':', '-')) { e -> ctx.toast(if (e == null) "Snapshot saved to Photos" else "Couldn't save the snapshot: ${e.message}") }
+                }.onFailure { ctx.toast("Couldn't take a snapshot: ${it.message}") }
+            }
+        }, tint = camOn)
         // Playback and gallery: the recorder's clips through Home Assistant.
         listOf(Icons.Outlined.PlayCircle to "Recordings", Icons.Outlined.Image to "Gallery").forEach { (icon, label) ->
             Icon(icon, label, Modifier.size(30.dp).clickable { Nav.go(Screen.Gallery(d.serial)) }, tint = C.Text)
