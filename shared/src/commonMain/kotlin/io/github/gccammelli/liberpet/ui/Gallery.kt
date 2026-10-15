@@ -60,6 +60,7 @@ import io.github.gccammelli.liberpet.clips
 import io.github.gccammelli.liberpet.local
 import io.github.gccammelli.liberpet.pad
 import io.github.gccammelli.liberpet.recordingDays
+import io.github.gccammelli.liberpet.recordingsFolder
 import io.github.gccammelli.liberpet.resolveMedia
 import kotlinx.datetime.LocalDate
 
@@ -78,10 +79,15 @@ fun GalleryScreen(d: Device, st: UiState) {
     var missing by remember { mutableStateOf(false) }
     var day by remember { mutableStateOf<String?>(null) }
     var clips by remember(day) { mutableStateOf<List<Clip>?>(null) }
+    var folder by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        runCatching { Repo.ha!!.recordingDays() }.onSuccess { days = it; day = it.firstOrNull() }.onFailure { missing = true }
+        runCatching {
+            val f = Repo.ha!!.recordingsFolder() ?: error("no recordings folder")
+            folder = f
+            Repo.ha!!.recordingDays(f)
+        }.onSuccess { days = it; day = it.firstOrNull() }.onFailure { missing = true }
     }
-    LaunchedEffect(day) { day?.let { dd -> clips = runCatching { Repo.ha!!.clips(dd) }.getOrDefault(emptyList()) } }
+    LaunchedEffect(day) { val f = folder; day?.let { dd -> if (f != null) clips = runCatching { Repo.ha!!.clips(dd, f) }.getOrDefault(emptyList()) } }
     Page("Recordings", { Nav.back() }) {
         when {
             missing -> Empty("No recordings in Home Assistant yet",

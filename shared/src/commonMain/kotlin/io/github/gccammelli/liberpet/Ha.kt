@@ -274,11 +274,23 @@ private suspend fun HaBackend.browse(path: String): JsonArray =
     ((ws(listOf(buildJsonObject { put("type", "media_source/browse_media"); put("media_content_id", mediaId(path)) })).first() as JsonObject)
         .a("children") ?: JsonArray(emptyList()))
 
-/** Days with recordings ("YYYY-MM-DD"), newest first. Throws if Home Assistant has no such media folder. */
-suspend fun HaBackend.recordingDays(folder: String = RECORDINGS): List<String> =
-    browse(folder).mapNotNull { it.jsonObject.s("title")?.takeIf { t -> t.matches(Regex("""\d{4}-\d{2}-\d{2}""")) } }.sortedDescending()
+private val DAY = Regex("""\d{4}-\d{2}-\d{2}""")
 
-suspend fun HaBackend.clips(day: String, folder: String = RECORDINGS): List<Clip> = parseClips(folder, day, browse("$folder/$day"))
+/**
+ * The recordings folder in Home Assistant's local media: one named like [RECORDINGS] in any capitalisation
+ * (the network storage's name is the user's choice). If several match, the first that holds recording days wins.
+ */
+suspend fun HaBackend.recordingsFolder(): String? {
+    val names = browse(".").mapNotNull { it.jsonObject.s("title") }.filter { it.equals(RECORDINGS, ignoreCase = true) }
+    return names.firstOrNull { n -> runCatching { browse(n).any { it.jsonObject.s("title")?.matches(DAY) == true } }.getOrDefault(false) }
+        ?: names.firstOrNull()
+}
+
+/** Days with recordings ("YYYY-MM-DD") in [folder], newest first. */
+suspend fun HaBackend.recordingDays(folder: String): List<String> =
+    browse(folder).mapNotNull { it.jsonObject.s("title")?.takeIf { t -> t.matches(DAY) } }.sortedDescending()
+
+suspend fun HaBackend.clips(day: String, folder: String): List<Clip> = parseClips(folder, day, browse("$folder/$day"))
 
 /** A playable address for a media id (signed by Home Assistant, valid for a day). */
 suspend fun HaBackend.resolveMedia(id: String): String {
