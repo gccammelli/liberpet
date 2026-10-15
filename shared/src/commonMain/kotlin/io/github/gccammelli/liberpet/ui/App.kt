@@ -1,5 +1,6 @@
 package io.github.gccammelli.liberpet.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.WaterDrop
@@ -64,6 +66,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -81,6 +84,7 @@ import io.github.gccammelli.liberpet.INTEGRATION_URL
 import io.github.gccammelli.liberpet.LocalPlatform
 import io.github.gccammelli.liberpet.Repo
 import io.github.gccammelli.liberpet.UiState
+import io.github.gccammelli.liberpet.decodeImage
 import io.github.gccammelli.liberpet.fmt
 import io.github.gccammelli.liberpet.minutesOf
 import io.github.gccammelli.liberpet.plans
@@ -171,14 +175,29 @@ fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
 fun HomeTab(st: UiState) {
     val home = st.home ?: return
     Column(Modifier.fillMaxSize().background(C.HomeBg).verticalScroll(rememberScrollState())) {
-        Box(Modifier.fillMaxWidth().height(300.dp).background(Brush.verticalGradient(listOf(Color(0xFFB9B6B3), Color(0xFF9D9A97), Color(0xFFC9C5C0))))) {
+        var editHeader by remember { mutableStateOf(false) }
+        Box(Modifier.fillMaxWidth().height(300.dp)) {
+            val bytes by Repo.header.collectAsState()
+            val photo = remember(bytes) { bytes?.let { decodeImage(it, 1600) } }
+            if (photo != null) Image(photo, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+            else HeaderArt(Modifier.matchParentSize())
+            // Keeps "All" and the buttons readable on any picture.
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color.Transparent, Color.Transparent, Color(0x55000000)))))
             Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 10.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HeaderCircle(if (st.loading) Icons.Default.Refresh else Icons.Outlined.NotificationsNone) { Repo.refresh() }
-                HeaderCircle(Icons.Default.Add) { Nav.tab = 3 }
+                HeaderCircle(Icons.Outlined.Image) { editHeader = true }
             }
             Row(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("All", 28.sp, Color.White, FontWeight.Bold)
                 Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White)
+            }
+        }
+        if (editHeader) {
+            val p = LocalPlatform.current
+            Sheet({ editHeader = false }, "HEADER PICTURE", confirm = null) {
+                NavRow("Choose photo") { editHeader = false; p.pickImage { b -> if (b != null) { if (decodeImage(b, 64) != null) Repo.setHeader(b) else p.toast("That file isn't a picture LiberPet can show") } } }
+                NavRow("Use default", chevron = false) { editHeader = false; Repo.setHeader(null) }
+                Gap(20.dp)
             }
         }
         Column(Modifier.offset(y = (-40).dp).padding(horizontal = 17.dp)) {

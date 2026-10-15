@@ -17,7 +17,15 @@ actual fun decodeImage(bytes: ByteArray, maxSide: Int): ImageBitmap? {
 
 fun androidStorage(ctx: Context): PlatformStorage {
     val auth = ctx.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    return PlatformStorage(settings = Prefs(ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)), secrets = KeystoreSecrets(auth))
+    return PlatformStorage(
+        settings = Prefs(ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)),
+        secrets = KeystoreSecrets(auth),
+        files = object : AppFiles {
+            override fun read(name: String) = java.io.File(ctx.filesDir, name).takeIf { it.exists() }?.readBytes()
+            override fun write(name: String, bytes: ByteArray) = java.io.File(ctx.filesDir, name).writeBytes(bytes)
+            override fun delete(name: String) { java.io.File(ctx.filesDir, name).delete() }
+        },
+    )
 }
 
 private class Prefs(private val p: SharedPreferences) : KeyValue {

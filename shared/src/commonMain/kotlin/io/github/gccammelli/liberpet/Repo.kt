@@ -36,6 +36,7 @@ object Repo {
         if (::store.isInitialized) return
         store = s
         io.github.gccammelli.liberpet.ui.ThemeMode.mode = s.settings.getString("theme") ?: "system"
+        header.value = s.files.read(HEADER)
         val url = s.settings.getString("ha_url")
         val token = s.secrets.get("ha_token")
         if (url != null && token != null) { ha = HaHttp(url, token); state.value = UiState(on = true) }
@@ -68,6 +69,15 @@ object Repo {
     fun ordered(devices: List<Device>): List<Device> {
         val saved = store.settings.getString("device_order")?.split(",").orEmpty()
         return devices.sortedBy { d -> saved.indexOf(d.serial).let { if (it < 0) Int.MAX_VALUE else it } }
+    }
+
+    /** The user's Home header picture (bytes as picked), or null for the drawn default. Kept on the phone only. */
+    val header = MutableStateFlow<ByteArray?>(null)
+    private const val HEADER = "header.img"
+
+    fun setHeader(bytes: ByteArray?) {
+        if (bytes == null) store.files.delete(HEADER) else store.files.write(HEADER, bytes)
+        header.value = bytes
     }
 
     fun setTheme(mode: String) { io.github.gccammelli.liberpet.ui.ThemeMode.mode = mode; store.settings.putString("theme", mode) }

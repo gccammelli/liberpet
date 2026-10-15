@@ -16,7 +16,14 @@ interface SecretStore {
     fun set(key: String, value: String?) // null removes
 }
 
-class PlatformStorage(val settings: KeyValue, val secrets: SecretStore)
+/** Private app files (the Home header picture). */
+interface AppFiles {
+    fun read(name: String): ByteArray?
+    fun write(name: String, bytes: ByteArray)
+    fun delete(name: String)
+}
+
+class PlatformStorage(val settings: KeyValue, val secrets: SecretStore, val files: AppFiles)
 
 /** UI-side platform actions, provided by MainActivity via [LocalPlatform]. */
 interface PlatformUi {
@@ -25,6 +32,8 @@ interface PlatformUi {
     fun toast(message: String)
     /** Light or dark status/navigation bar icons to match the app's theme. */
     fun setDarkBars(dark: Boolean)
+    /** Let the user pick a photo (system photo picker); [done] gets its bytes, or null if cancelled. */
+    fun pickImage(done: (ByteArray?) -> Unit)
 }
 
 val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No platform provided") }

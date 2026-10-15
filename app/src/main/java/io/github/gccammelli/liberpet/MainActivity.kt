@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import io.github.gccammelli.liberpet.ui.AppTheme
@@ -16,6 +18,13 @@ import io.github.gccammelli.liberpet.ui.Nav
 import io.github.gccammelli.liberpet.ui.Root
 
 class MainActivity : ComponentActivity(), PlatformUi {
+    private var pendingPick: ((ByteArray?) -> Unit)? = null
+    private val pick = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val done = pendingPick ?: return@registerForActivityResult
+        pendingPick = null
+        done(uri?.let { u -> runCatching { contentResolver.openInputStream(u)!!.use { it.readBytes() } }.getOrNull() })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -35,6 +44,11 @@ class MainActivity : ComponentActivity(), PlatformUi {
     override val appVersion: String get() = BuildConfig.VERSION_NAME
     override fun openUrl(url: String) = startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     override fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+
+    override fun pickImage(done: (ByteArray?) -> Unit) {
+        pendingPick = done
+        pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
 
     override fun setDarkBars(dark: Boolean) {
         val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
