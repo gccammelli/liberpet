@@ -58,6 +58,15 @@ def log(*a):
     print(datetime.now().strftime("%H:%M:%S"), *a, flush=True)
 
 
+def place(src, dst):
+    """Moves a finished file into the clips folder, which may be another filesystem than the buffer (a size-capped
+    image, a network share): copied under a temporary name there, then renamed, so viewers never see half a file."""
+    tmp = dst.with_name(f".{dst.name}.part")
+    shutil.copyfile(src, tmp)
+    os.replace(tmp, dst)
+    src.unlink()
+
+
 class Recorder:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -187,9 +196,9 @@ class Recorder:
         subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-ss", str(min(self.cfg["pre_roll_s"], 5)), "-i", str(tmp),
                         "-frames:v", "1", "-vf", "scale=480:-2", "-update", "1", str(thumb)], check=False)
         if thumb.exists():
-            thumb.replace(folder / thumb.name)
+            place(thumb, folder / thumb.name)
         mp4 = folder / f"{name}.mp4"
-        tmp.replace(mp4)
+        place(tmp, mp4)
         (folder / f"{name}.json").write_text(json.dumps({
             "start": datetime.fromtimestamp(start, timezone.utc).isoformat(), "duration_s": dur,
             "reasons": sorted(reasons), "motion": round(score, 4)}))
@@ -212,7 +221,10 @@ class Recorder:
                             w[1] = w[0] + self.cfg["max_clip_s"]
                         ready.append(w)
             for w in ready:
-                self.cut(*w)
+                try:
+                    self.cut(*w)
+                except Exception as e:  # one bad clip (disk full, a glitch) mustn't stop all the later ones
+                    log("couldn't save a clip:", e)
             keep_from = min([w[0] for w in self.windows] + [now - self.cfg["buffer_s"]])
             for t, p in self.segments():
                 if t < keep_from - SEGMENT_S:
