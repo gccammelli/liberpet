@@ -68,8 +68,7 @@ import io.github.gccammelli.petlibre.LocalPlatform
 import io.github.gccammelli.petlibre.Repo
 import io.github.gccammelli.petlibre.UiState
 import io.github.gccammelli.petlibre.fmt
-import io.github.gccammelli.petlibre.localHm
-import io.github.gccammelli.petlibre.localMinutes
+import io.github.gccammelli.petlibre.minutesOf
 import io.github.gccammelli.petlibre.plans
 import kotlin.time.Clock
 import io.github.gccammelli.petlibre.local
@@ -230,8 +229,8 @@ fun DeviceCard(d: Device, st: UiState, modifier: Modifier) = Column(modifier.cli
 fun nextFeeding(d: Device): String {
     val g = d.num("next_feed_quantity_weight") ?: 0.0
     val now = Clock.System.now().local().time.let { it.hour * 60 + it.minute }
-    val p = d.plans.filter { it.enabled }.minByOrNull { (localMinutes(it.utc) - now + 1439) % 1440 } ?: return "--"
-    return "${localHm(p.utc)} (${fmt(if (g > 0) g else p.grams)} g)"
+    val p = d.plans.filter { it.enabled }.minByOrNull { (minutesOf(it.time) - now + 1439) % 1440 } ?: return "--"
+    return "${p.time} (${fmt(if (g > 0) g else p.grams)} g)"
 }
 
 @Composable

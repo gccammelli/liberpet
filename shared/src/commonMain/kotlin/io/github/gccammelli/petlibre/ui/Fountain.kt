@@ -54,6 +54,7 @@ import io.github.gccammelli.petlibre.Pet
 import io.github.gccammelli.petlibre.Repo
 import io.github.gccammelli.petlibre.UiState
 import io.github.gccammelli.petlibre.dispensingModes
+import io.github.gccammelli.petlibre.dur
 import io.github.gccammelli.petlibre.fmt
 import io.github.gccammelli.petlibre.local
 import io.github.gccammelli.petlibre.pad
@@ -256,8 +257,10 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
     var range by remember { mutableStateOf(0) }
     var anchor by remember { mutableStateOf(today) }
     Page("Petlibre", { Nav.back() }, bg = C.Bg) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            T("WATER INTAKE", 30.sp, weight = FontWeight.Bold, modifier = Modifier.padding(vertical = 18.dp))
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+          T("WATER INTAKE", 30.sp, weight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().background(Color.White).padding(start = 16.dp, top = 10.dp, bottom = 22.dp))
+          Gap(14.dp)
+          Column(Modifier.padding(horizontal = 16.dp)) {
             Caps("TODAY")
             Card(padding = PaddingValues(20.dp)) {
                 val ml = daily[today] ?: 0.0
@@ -272,7 +275,7 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
                     Column {
                         T("Times", 12.sp, C.Faint); T("${d.num("today_drinking_count")?.toInt() ?: 0}", 18.sp, weight = FontWeight.Medium)
                         Gap(14.dp)
-                        T("Length of Time", 12.sp, C.Faint); T("${d.num("today_drinking_time")?.toInt() ?: 0}s", 18.sp, weight = FontWeight.Medium)
+                        T("Length of Time", 12.sp, C.Faint); T(dur(d.num("today_drinking_time") ?: 0.0), 18.sp, weight = FontWeight.Medium)
                     }
                 }
                 Gap(18.dp); Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line)); Gap(14.dp)
@@ -317,6 +320,7 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
                 Row { T("Total Water Intake", 13.sp, modifier = Modifier.weight(1f)); T("${fmt(bars.first.sum())} ml", 13.sp, C.Sub) }
             }
             Gap(24.dp)
+          }
         }
     }
 }

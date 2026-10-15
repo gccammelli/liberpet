@@ -74,8 +74,10 @@ import io.github.gccammelli.petlibre.UiState
 import io.github.gccammelli.petlibre.fmt
 import io.github.gccammelli.petlibre.gramsPerPortion
 import io.github.gccammelli.petlibre.local
-import io.github.gccammelli.petlibre.localHm
-import io.github.gccammelli.petlibre.localMinutes
+import io.github.gccammelli.petlibre.minutesOf
+import io.github.gccammelli.petlibre.petlibro
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import io.github.gccammelli.petlibre.pad
 import io.github.gccammelli.petlibre.plans
 import io.github.gccammelli.petlibre.scheduleEnabled
@@ -171,33 +173,45 @@ fun BigStat(value: String, unit: String, label: String, modifier: Modifier) = Co
     T(label, 13.sp, C.Sub)
 }
 
-/** A plan whose time hasn't come yet today is pending, whatever the cloud says (its "today" lags past midnight). */
-private fun planStatus(p: Plan): String {
+/**
+ * Today's state: "Completed"/"Skipped"/"Failed" once its time has passed, else null (upcoming, shown as an on/off switch).
+ * A plan whose time hasn't come yet is upcoming whatever the cloud says (its "today" lags just after midnight).
+ */
+private fun pastStatus(p: Plan): String? {
     val now = Clock.System.now().local().time.let { it.hour * 60 + it.minute }
-    return when {
-        p.todayState == "skipped" -> "Skipped"
-        localMinutes(p.utc) > now -> "Pending"
-        p.todayState == "dispensed" || p.todayState == "completed" -> "Completed"
-        p.todayState == "failed" -> "Failed"
-        else -> "Pending"
+    if (minutesOf(p.time) > now) return null
+    return when (p.todayState) {
+        "dispensed" -> "Completed"
+        "skipped", "to_be_skipped" -> "Skipped"
+        "pending" -> null
+        else -> "Failed"
     }
 }
 
 @Composable
 fun TodaySchedule(d: Device) {
-    val today = d.plans.filter { it.todayState != null && it.enabled }.sortedBy { localMinutes(it.utc) }
+    val err = errorToast()
+    val today = d.plans.filter { it.todayState != null && it.enabled }.sortedBy { minutesOf(it.time) }
+    val upcoming = today.filter { pastStatus(it) == null }
     Card(padding = PaddingValues(horizontal = 24.dp, vertical = 22.dp)) {
-        T("Today's Schedule", 18.sp, weight = FontWeight.Medium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("Today's Schedule", 18.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            if (upcoming.isNotEmpty()) Toggle(upcoming.any { it.todayState != "to_be_skipped" }) { on ->
+                Repo.act(d, err) { petlibro("toggle_today_feeding_schedule", d, buildJsonObject { put("enable", on) }) }
+            }
+        }
         Gap(14.dp)
         if (today.isEmpty()) T("No feeding plans today", 15.sp, C.Faint, modifier = Modifier.padding(vertical = 10.dp))
         today.forEach { p ->
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
-            Row(Modifier.fillMaxWidth().padding(vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                val status = planStatus(p)
-                val done = status != "Pending"
-                T(localHm(p.utc), 20.sp, if (done) C.Faint else C.Text, modifier = Modifier.width(86.dp))
-                T("${fmt(p.grams)}g", 18.sp, if (done) C.Faint else C.Text, modifier = Modifier.weight(1f))
-                T(status, 13.sp, C.Faint)
+            val status = pastStatus(p)
+            Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+                T(p.time, 20.sp, if (status != null) C.Faint else C.Text, modifier = Modifier.width(86.dp))
+                T("${fmt(p.grams)}g", 18.sp, if (status != null) C.Faint else C.Text, modifier = Modifier.weight(1f))
+                // Switch off = skip this feed today only.
+                if (status == null) Toggle(p.todayState != "to_be_skipped") { on ->
+                    Repo.act(d, err) { petlibro("skip_feeding_plan", d, buildJsonObject { put("plan_id", p.id); put("skip", !on) }) }
+                } else T(status, 13.sp, C.Faint)
             }
         }
     }
@@ -373,11 +387,11 @@ fun ScheduleScreen(d: Device) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Gap(12.dp)
             ToggleRow("Feeding Schedule", d.scheduleEnabled) { Repo.toggleSchedule(d, it, err) }
-            d.plans.sortedBy { localMinutes(it.utc) }.forEach { p ->
+            d.plans.sortedBy { minutesOf(it.time) }.forEach { p ->
                 Gap(12.dp)
                 Column(Modifier.fillMaxWidth().background(Color.White).clickable { Nav.go(Screen.PlanEdit(d.serial, p.id)) }.padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        T(localHm(p.utc), 26.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        T(p.time, 26.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Toggle(p.enabled) { Repo.togglePlan(d, p, it, err) }
                     }
                     Gap(10.dp); Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line)); Gap(16.dp)
@@ -395,7 +409,7 @@ fun ScheduleScreen(d: Device) {
 fun PlanEditScreen(d: Device, plan: Plan?) {
     val err = errorToast()
     val step = d.gramsPerPortion.toInt().coerceAtLeast(1)
-    var time by remember { mutableStateOf(plan?.let { localHm(it.utc) } ?: "08:00") }
+    var time by remember { mutableStateOf(plan?.time ?: "08:00") }
     var portions by remember { mutableStateOf(plan?.portions ?: 1) }
     var days by remember { mutableStateOf(plan?.days ?: (1..7).toList()) }
     var label by remember { mutableStateOf(plan?.label ?: "") }

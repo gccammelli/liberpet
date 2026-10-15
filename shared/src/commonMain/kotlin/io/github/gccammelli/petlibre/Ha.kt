@@ -14,6 +14,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -101,7 +102,8 @@ class Entity(val id: String, val state: String, val attrs: JsonObject) {
 }
 
 /** A Petlibro device (feeder or fountain) with its entities keyed by the integration's key ("today_drinking_amount"). */
-data class Device(val haId: String, val serial: String, val name: String, val model: String, val room: String?, val firmware: String?, val e: Map<String, Entity>) {
+/** [tz] is Home Assistant's time zone: the integration logs in with it, so the cloud's plan times are in it. */
+data class Device(val haId: String, val serial: String, val name: String, val model: String, val room: String?, val firmware: String?, val e: Map<String, Entity>, val tz: TimeZone = TimeZone.UTC) {
     val isFeeder get() = model.startsWith("PLAF")
     val isFountain get() = model.startsWith("PLWF")
     fun num(k: String) = e[k]?.num
@@ -121,8 +123,8 @@ data class Pet(val haId: String, val id: String, val name: String, val e: Map<St
     val linkedSerials get() = e["boundDeviceNums"]?.attrs?.keys?.toList().orEmpty()
 }
 
-/** A feeding plan. [utc] is "HH:mm" in UTC as the cloud stores it; [days] are 1 = Monday … 7 = Sunday. */
-data class Plan(val id: Long, val utc: String, val grams: Double, val portions: Int, val enabled: Boolean, val days: List<Int>, val label: String, val todayState: String?)
+/** A feeding plan. [time] is "HH:mm" in the phone's time zone; [days] are 1 = Monday … 7 = Sunday. */
+data class Plan(val id: Long, val time: String, val grams: Double, val portions: Int, val enabled: Boolean, val days: List<Int>, val label: String, val todayState: String?)
 
 data class Home(val devices: List<Device>, val pets: List<Pet>, val owner: String?)
 
@@ -136,10 +138,11 @@ suspend fun HaBackend.loadHome(): Home {
         val o = it.jsonObject
         o.s("entity_id")!! to Entity(o.s("entity_id")!!, o.s("state") ?: "", o.o("attributes") ?: JsonObject(emptyMap()))
     }
-    return homeFrom(devs, ents, areas, states)
+    val tz = json.parseToJsonElement(get("/api/config")).jsonObject.s("time_zone")?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: TimeZone.UTC
+    return homeFrom(devs, ents, areas, states, tz)
 }
 
-fun homeFrom(devs: JsonArray, ents: JsonArray, areas: JsonArray, states: Map<String, Entity>): Home {
+fun homeFrom(devs: JsonArray, ents: JsonArray, areas: JsonArray, states: Map<String, Entity>, tz: TimeZone = TimeZone.UTC): Home {
     val areaName = areas.associate { it.jsonObject.s("area_id") to it.jsonObject.s("name") }
     val byDevice = ents.map { it.jsonObject }.filter { it.s("platform") == "petlibro" && it.s("disabled_by") == null }.groupBy { it.s("device_id") }
     val devices = mutableListOf<Device>()
@@ -154,11 +157,11 @@ fun homeFrom(devs: JsonArray, ents: JsonArray, areas: JsonArray, states: Map<Str
             pets += Pet(d.s("id")!!, serial, name, e)
         } else {
             val e = mine.mapNotNull { r -> DEVICE_KEY.find(r.s("unique_id") ?: "")?.let { m -> states[r.s("entity_id")]?.let { m.groupValues[1] to it } } }.toMap()
-            devices += Device(d.s("id")!!, serial, name, d.s("model") ?: "", areaName[d.s("area_id")], d.s("sw_version"), e)
+            devices += Device(d.s("id")!!, serial, name, d.s("model") ?: "", areaName[d.s("area_id")], d.s("sw_version"), e, tz)
         }
     }
     val owner = states.values.firstOrNull { it.attrs.s("nickname") != null && it.id.startsWith("sensor.petlibro_") }?.attrs?.s("nickname")
-    return Home(devices.sortedBy { if (it.isFountain) 0 else 1 }, pets, owner)
+    return Home(devices, pets.sortedWith(compareBy({ it.e["pet"]?.attrs?.s("mainPet") != "true" }, { it.id.toLongOrNull() ?: 0 })), owner) // devices in Home Assistant's order (Petlibro's isn't exposed); main pet first, as Petlibro
 }
 
 // ---------- Feeder ----------
@@ -168,7 +171,7 @@ val Device.plans: List<Plan>
         val p = el.jsonObject
         Plan(
             id = p.s("id")?.toLongOrNull() ?: return@mapNotNull null,
-            utc = p.s("time")?.take(5) ?: return@mapNotNull null,
+            time = shiftHm(p.s("time")?.take(5) ?: return@mapNotNull null, tz, zone),
             grams = p.s("amount_g")?.toDoubleOrNull() ?: 0.0,
             portions = p.s("amount_raw")?.toIntOrNull() ?: 1,
             enabled = p.s("enabled") == "true",
@@ -210,7 +213,8 @@ suspend fun HaBackend.feedNow(d: Device, grams: Int) {
 suspend fun HaBackend.petlibro(service: String, d: Device, data: JsonObject = JsonObject(emptyMap())) =
     call("petlibro", service, JsonObject(data + ("device_id" to JsonPrimitive(d.haId))))
 
-fun planData(utc: String, portions: Int, days: List<Int>, label: String) = buildJsonObject {
-    put("time", "$utc:00"); put("portions", portions); put("label", label)
+/** [time] is the cloud's "HH:mm", i.e. in Home Assistant's time zone. */
+fun planData(time: String, portions: Int, days: List<Int>, label: String) = buildJsonObject {
+    put("time", "$time:00"); put("portions", portions); put("label", label)
     put("days", JsonArray(days.sorted().map { JsonPrimitive("$it") })); put("sound", false)
 }

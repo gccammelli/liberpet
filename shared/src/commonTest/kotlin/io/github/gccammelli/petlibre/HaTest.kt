@@ -35,7 +35,7 @@ class HaTest {
     @Test
     fun devicesPetsAndKeys() {
         val h = homeFrom(devs, ents, areas, states)
-        assertEquals(listOf("Kitchen fountain", "Granary Camera Feeder"), h.devices.map { it.name }) // fountains first, user's name wins
+        assertEquals(listOf("Granary Camera Feeder", "Kitchen fountain"), h.devices.map { it.name }) // registry order; the user's name wins
         val feeder = h.devices.first { it.isFeeder }
         assertEquals("Kitchen", feeder.room)
         assertEquals(70.0, feeder.num("today_feeding_quantity_weight"))
@@ -73,7 +73,7 @@ class HaTest {
     fun feedingsScheduledOrManual() {
         // Today's date, so the plan's UTC time maps to local time with today's offset (as the app does).
         val d = kotlin.time.Clock.System.now().toString().take(10)
-        val plan = Plan(1, "08:00", 10.0, 1, true, (1..7).toList(), "", null)
+        val plan = Plan(1, shiftHm("08:00", kotlinx.datetime.TimeZone.UTC, zone), 10.0, 1, true, (1..7).toList(), "", null)
         val times = listOf(pt("${d}T08:00:30Z", "${d}T08:00:12Z"), pt("${d}T12:34:40Z", "${d}T12:34:20Z"))
         val grams = listOf(pt("${d}T07:00:00Z", "10.0"), pt("${d}T12:34:41Z", "20.0"))
         val log = feedLog(times, grams, listOf(plan))
@@ -81,7 +81,11 @@ class HaTest {
     }
 
     @Test
-    fun utcRoundTrip() {
-        for (t in listOf("00:00", "04:20", "13:05", "23:59")) assertEquals(t, localHm(utcHm(t)))
+    fun planTimesFollowHomeAssistantsZone() {
+        val tokyo = kotlinx.datetime.TimeZone.of("Asia/Tokyo")
+        fun firstPlan(tz: kotlinx.datetime.TimeZone) = homeFrom(devs, ents, areas, states, tz).devices.first { it.isFeeder }.plans[0].time
+        assertEquals("03:20", firstPlan(zone)) // Home Assistant in the phone's zone: the cloud's time as is
+        assertEquals(shiftHm("03:20", tokyo, zone), firstPlan(tokyo)) // elsewhere: shown in the phone's zone
+        for (t in listOf("00:00", "04:20", "13:05", "23:59")) assertEquals(t, shiftHm(shiftHm(t, zone, tokyo), tokyo, zone))
     }
 }

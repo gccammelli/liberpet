@@ -95,7 +95,7 @@ object Repo {
     fun feedNow(d: Device, grams: Int, onError: (String) -> Unit) = act(d, onError) { feedNow(d, grams) }
 
     fun setPlan(d: Device, plan: Plan?, localTime: String, portions: Int, days: List<Int>, label: String, onError: (String) -> Unit) = act(d, onError) {
-        val data = planData(utcHm(localTime), portions, days, label)
+        val data = planData(shiftHm(localTime, zone, d.tz), portions, days, label)
         if (plan == null) petlibro("add_feeding_plan", d, data)
         else petlibro("edit_feeding_plan", d, kotlinx.serialization.json.JsonObject(data + ("plan_id" to JsonPrimitive(plan.id))))
     }

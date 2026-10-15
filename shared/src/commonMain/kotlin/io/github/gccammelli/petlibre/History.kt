@@ -60,7 +60,7 @@ private fun List<Point>.before(t: Instant): Double = lastOrNull { it.at < t - 10
 
 /** Feedings, newest first. Scheduled when the time matches a plan (± 2 min), manual otherwise. */
 fun feedLog(times: List<Point>, grams: List<Point>, plans: List<Plan>): List<LogEntry> {
-    val planMinutes = plans.map { localMinutes(it.utc) }
+    val planMinutes = plans.map { minutesOf(it.time) }
     return times.map { it.state }.distinct().mapNotNull { s ->
         val at = runCatching { Instant.parse(s) }.getOrNull() ?: return@mapNotNull null
         val changed = times.first { it.state == s }.at
@@ -88,7 +88,7 @@ fun drinkLog(count: List<Point>, ml: List<Point>, secs: List<Point>, online: Lis
         val t = count[i].at
         val dml = ((ml.at(t) ?: 0.0) - ml.before(t)).coerceAtLeast(0.0)
         val ds = ((secs.at(t) ?: 0.0) - secs.before(t)).coerceAtLeast(0.0)
-        out += LogEntry(t, "Your pet(s) drank ${fmt(dml)} ml water in ${ds.toInt()}s.")
+        out += LogEntry(t, "Your pet(s) drank ${fmt(dml)} ml water in ${dur(ds)}.")
     }
     return out.sortedByDescending { it.at }
 }
@@ -111,23 +111,19 @@ suspend fun HaBackend.dailyStats(id: String, days: Int): Map<LocalDate, Double> 
     }?.toMap().orEmpty()
 }
 
-/** "03:20" UTC → minutes after local midnight today. */
-fun localMinutes(utc: String): Int {
-    val (h, m) = utc.split(":").map { it.toInt() }
-    val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
-    val t = with(TimeZone.UTC) { kotlinx.datetime.LocalDateTime(today, LocalTime(h, m)).toInstant() }.local().time
-    return t.hour * 60 + t.minute
-}
+/** "HH:mm" → minutes after midnight. */
+fun minutesOf(hm: String) = hm.split(":").let { (h, m) -> h.toInt() * 60 + m.toInt() }
 
-fun localHm(utc: String) = localMinutes(utc).let { "${pad(it / 60)}:${pad(it % 60)}" }
-
-/** Local "HH:mm" → UTC "HH:mm" (today's offset). */
-fun utcHm(local: String): String {
-    val (h, m) = local.split(":").map { it.toInt() }
-    val today = Clock.System.now().local().date
-    val t = with(zone) { kotlinx.datetime.LocalDateTime(today, LocalTime(h, m)).toInstant() }.toLocalDateTime(TimeZone.UTC).time
+/** Today's "HH:mm" in [from] as "HH:mm" in [to]. */
+fun shiftHm(hm: String, from: TimeZone, to: TimeZone): String {
+    if (from == to) return hm
+    val (h, m) = hm.split(":").map { it.toInt() }
+    val t = with(from) { kotlinx.datetime.LocalDateTime(Clock.System.now().toLocalDateTime(from).date, LocalTime(h, m)).toInstant() }.toLocalDateTime(to).time
     return "${pad(t.hour)}:${pad(t.minute)}"
 }
+
+/** Seconds as Petlibro writes them: "12s", "01m01s". */
+fun dur(s: Double) = s.toInt().let { if (it < 60) "${it}s" else "${pad(it / 60)}m${pad(it % 60)}s" }
 
 fun pad(n: Int) = n.toString().padStart(2, '0')
 fun fmt(v: Double) = if (v == kotlin.math.floor(v)) v.toLong().toString() else ((v * 10).toLong() / 10.0).toString()
