@@ -88,4 +88,20 @@ class HaTest {
         assertEquals(shiftHm("03:20", tokyo, zone), firstPlan(tokyo)) // elsewhere: shown in the phone's zone
         for (t in listOf("00:00", "04:20", "13:05", "23:59")) assertEquals(t, shiftHm(shiftHm(t, zone, tokyo), tokyo, zone))
     }
+
+    @Test
+    fun recentActivityInPetlibrosWords() {
+        val attrs = json.parseToJsonElement("""{"records":[
+            {"time":"2026-10-15T05:30:39+00:00","type":"DRINK","event":"DRINK_EVENT","ml":6,"seconds":17},
+            {"time":"2026-10-15T04:52:35+00:00","type":"DRINK","event":"DRINK_EVENT","ml":12,"seconds":61},
+            {"time":"2026-10-15T04:30:09+00:00","type":"GRAIN_OUTPUT_SUCCESS","event":"FEEDING_PLAN_SUCCESS","portions":1,"plan_id":1316289},
+            {"time":"2026-10-14T20:47:26+00:00","type":"GRAIN_OUTPUT_SUCCESS","event":"MANUAL_FEEDING_SUCCESS","portions":2,"plan_id":null},
+            {"time":"bad","type":"DRINK"}]}""").jsonObject
+        val log = activityLog(parseActivity(attrs), 10.0)
+        assertEquals(listOf(
+            "Your pet(s) drank 6 ml water in 17s.", "Your pet(s) drank 12 ml water in 01m01s.",
+            "Feeding schedule successful. 10g dispensed.", "Manual feeding successful. 20g dispensed.",
+        ), log.map { it.text })
+        assertEquals(Instant.parse("2026-10-15T05:30:39Z"), log[0].at)
+    }
 }

@@ -143,7 +143,12 @@ suspend fun HaBackend.loadLogs(home: Home): Logs {
     val daily = mutableMapOf<String, Map<LocalDate, Double>>()
     for (d in home.devices) {
         val total = if (d.isFeeder) "today_feeding_quantity_weight" else "today_drinking_amount"
-        if (d.isFeeder) feeds[d.serial] = feedLog(pts(d, "last_feed_time"), pts(d, "last_feed_quantity_weight"), d.plans)
+        val act = d.e["recent_activity"]
+        if (act != null) {
+            // Patched integration: Petlibro's own log, exact times.
+            val log = activityLog(activity(act.id, act.attrs, 30), d.gramsPerPortion)
+            if (d.isFeeder) feeds[d.serial] = log else drinks[d.serial] = log
+        } else if (d.isFeeder) feeds[d.serial] = feedLog(pts(d, "last_feed_time"), pts(d, "last_feed_quantity_weight"), d.plans)
         else drinks[d.serial] = drinkLog(pts(d, "today_drinking_count"), pts(d, "today_drinking_amount"), pts(d, "today_drinking_time"), pts(d, "online"))
         val stats = d.e[total]?.id?.let { runCatching { dailyStats(it, 366) }.getOrNull() }.orEmpty()
         daily[d.serial] = stats + dailyMax(pts(d, total))

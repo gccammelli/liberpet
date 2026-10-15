@@ -93,6 +93,41 @@ fun drinkLog(count: List<Point>, ml: List<Point>, secs: List<Point>, online: Lis
     return out.sortedByDescending { it.at }
 }
 
+/** One record of the integration's "Recent Activity" sensor: Petlibro's own log, with exact times. */
+data class Activity(val at: Instant, val type: String, val event: String, val ml: Double?, val secs: Double?, val portions: Double?, val planId: Long?)
+
+fun parseActivity(attrs: JsonObject): List<Activity> = attrs.a("records")?.mapNotNull { el ->
+    val r = el as? JsonObject ?: return@mapNotNull null
+    Activity(
+        at = r.s("time")?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return@mapNotNull null,
+        type = r.s("type") ?: "", event = r.s("event") ?: "",
+        ml = r.s("ml")?.toDoubleOrNull(), secs = r.s("seconds")?.toDoubleOrNull(),
+        portions = r.s("portions")?.toDoubleOrNull(), planId = r.s("plan_id")?.toLongOrNull(),
+    )
+}.orEmpty()
+
+/** The sensor keeps the latest 50 records; its recorded states hold the older ones. Merged, newest first. */
+suspend fun HaBackend.activity(id: String, current: JsonObject, days: Int): List<Activity> {
+    val now = Clock.System.now()
+    val past = runCatching {
+        json.parseToJsonElement(get("/api/history/period/${now - days.days}?filter_entity_id=$id&end_time=${now + 1.hours}"))
+            .jsonArray.flatMap { series -> series.jsonArray.flatMap { st -> (st as? JsonObject)?.o("attributes")?.let(::parseActivity).orEmpty() } }
+    }.getOrDefault(emptyList())
+    return (parseActivity(current) + past).distinctBy { it.at to it.type }.sortedByDescending { it.at }
+}
+
+/** Log lines in Petlibro's words. Feedings with a plan id were scheduled; others manual. */
+fun activityLog(acts: List<Activity>, gramsPerPortion: Double): List<LogEntry> = acts.map { a ->
+    LogEntry(a.at, when {
+        a.type == "DRINK" -> "Your pet(s) drank ${fmt(a.ml ?: 0.0)} ml water in ${dur(a.secs ?: 0.0)}."
+        a.type == "GRAIN_OUTPUT_SUCCESS" -> {
+            val g = fmt((a.portions ?: 0.0) * gramsPerPortion)
+            if (a.planId != null || "PLAN" in a.event) "Feeding schedule successful. ${g}g dispensed." else "Manual feeding successful. ${g}g dispensed."
+        }
+        else -> (a.event.ifBlank { a.type }).lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() } + "."
+    })
+}
+
 /** Each local day's total of a sensor that counts up through the day and resets at midnight (its daily maximum). */
 fun dailyMax(points: List<Point>): Map<LocalDate, Double> =
     points.groupBy { it.at.local().date }.mapValues { (_, p) -> p.maxOf { it.state.toDoubleOrNull() ?: 0.0 } }
