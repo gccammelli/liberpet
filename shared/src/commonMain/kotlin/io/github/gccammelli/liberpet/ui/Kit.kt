@@ -181,9 +181,9 @@ fun Gap(h: Dp = 12.dp) = Spacer(Modifier.height(h))
 
 @Composable
 fun DarkButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) =
-    Box(modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).background(if (enabled) C.Dark else C.Dark.copy(alpha = .4f))
+    Box(modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).background(if (enabled) C.Dark else C.Track)
         .clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        T(text, 17.sp, C.OnDark)
+        T(text, 17.sp, if (enabled) C.OnDark else C.Sub) // disabled: muted, but readable in both themes
     }
 
 @Composable
