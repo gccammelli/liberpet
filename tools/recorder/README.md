@@ -65,6 +65,22 @@ systemctl --user enable --now liberpet-recorder
 sudo loginctl enable-linger "$USER"   # keep user services running when logged out
 ```
 
+## Optional: a hard size limit
+
+`cap_gb` is enforced by the recorder itself. For a limit the operating system enforces, put the folder in its own
+fixed-size filesystem: a file on the big drive, formatted and mounted at the folder's path. Home Assistant then also
+shows the real size (an NFS share otherwise reports the whole drive). Keep `cap_gb` a little below its size.
+
+```sh
+sudo fallocate -l 128G /srv/liberpet-recordings.img
+sudo mkfs.ext4 -q -m 0 -L liberpet /srv/liberpet-recordings.img
+sudo mkdir -p RECORDINGS_FOLDER
+echo '/srv/liberpet-recordings.img RECORDINGS_FOLDER ext4 loop,nofail 0 2' | sudo tee -a /etc/fstab
+sudo mount RECORDINGS_FOLDER && sudo chown "$USER": RECORDINGS_FOLDER
+```
+
+`nofail` keeps the machine booting even if the image can't be mounted.
+
 ## Sharing the folder with Home Assistant
 
 Keep the clips outside Home Assistant and share them read-only.
