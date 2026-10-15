@@ -139,7 +139,7 @@ fun TeachScreen(d: Device, st: UiState) {
                         Card(padding = PaddingValues(0.dp)) {
                             Box(Modifier.fillMaxWidth().heightIn(min = 240.dp).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
                                 val img = rememberHaImage("/media/local/$folder/${photo.path}", 900)
-                                if (img != null) Image(img, "A cat at the ${photo.side} bowl", Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
+                                if (img != null) Image(img, "The ${photo.side} bowl", Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
                                 else CircularProgressIndicator(color = Color.White)
                                 if (saving) Box(Modifier.matchParentSize().background(Color(0x66000000)), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(color = Color.White)
@@ -147,7 +147,8 @@ fun TeachScreen(d: Device, st: UiState) {
                             }
                         }
                         Gap(16.dp)
-                        T("Who's eating from the ${photo.side} bowl?", 18.sp, weight = FontWeight.Medium)
+                        T("Who's at the ${photo.side} bowl?", 18.sp, weight = FontWeight.Medium)
+                        T("The bright side of the picture", 13.sp, C.Sub)
                         photo.guess?.let { g -> (if (g == NO_CAT) "no cat" else pets.firstOrNull { it.id == g }?.name)?.let {
                             Gap(4.dp); T("LiberPet thinks: $it", 13.sp, C.Sub)
                         } }

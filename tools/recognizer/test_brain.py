@@ -22,6 +22,13 @@ for c in range(40):  # clip c: cat A at the left bowl, cat B at the right one on
 
 assert b.to_label(3) and b.accuracy() == (0.0, {})  # nothing labelled: everything is a candidate
 
+# Only one cat labelled so far: it should go looking for something different (the other cat), on both bowls.
+b.labels = {p: "pet-a" for p in list(b.ids)[:8] if truth[p] == "pet-a"}
+ask = b.to_label(4)
+assert {truth[p] for p in ask} - {"pet-a"}, ask  # not only more of the same cat
+assert {b.meta[p]["side"] for p in ask} == {"left", "right"}
+b.labels = {}
+
 # The user labels whatever it asks about, a few rounds, as LiberPet would.
 for _ in range(6):
     for pid in b.to_label(4):

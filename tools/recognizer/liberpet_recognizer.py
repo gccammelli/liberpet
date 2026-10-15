@@ -34,7 +34,7 @@ DEFAULTS = {
     "label_entity": "input_text.liberpet_label",
     "sensor": "sensor.liberpet_cats",
     "split": [0.36, 0.44],           # the feeder's post: left bowl ends, right bowl starts (fraction of the width)
-    "every_s": 2,                    # one frame every N seconds of clip
+    "every_s": 1,                    # one frame every N seconds of clip
     "cat_score": 0.02,               # CLIP "cat" minus "empty bowl" similarity a picture needs to count
     "queue": 6,                      # pictures offered for labelling at a time
     "k": 5,
@@ -110,13 +110,19 @@ class Brain:
         return (right / total if total else 0.0), counts
 
     def to_label(self, n, recent=3000):
-        """The unlabelled cat pictures it's least sure about (among the most recent), at most one per clip and bowl."""
+        """
+        Unlabelled cat pictures to ask about next (at most one per clip and bowl, left and right in turn).
+        With labels for two or more cats: the ones it's least sure about. Before that: the ones least like any
+        labelled picture, which is where an unlabelled cat is. Ties go to pictures where more of the cat shows.
+        """
         cands = [p for p in self.ids[-recent * 4:] if p not in self.labels and self.meta[p]["cat"]][-recent:]
         if not cands:
             return []
         lab = [(self.pos[p], l) for p, l in self.labels.items() if p in self.pos]
-        if lab:  # all candidates at once: margin between the two best labels' summed similarity
+        cats = {l for _, l in lab if l != NONE}
+        if lab:
             L = self.emb[[j for j, _ in lab]]; S = self.emb[[self.pos[p] for p in cands]] @ L.T
+        if len(cats) >= 2:  # margin between the two best labels' summed similarity
             names = sorted({l for _, l in lab}); col = {l: i for i, l in enumerate(names)}
             top = np.argsort(-S, axis=1)[:, : self.k]
             sure = []
@@ -126,16 +132,21 @@ class Brain:
                     v[col[lab[t][1]]] += max(S[r, t], 0)
                 v = np.sort(v)[::-1]
                 sure.append((v[0] - (v[1] if len(v) > 1 else 0)) / (v.sum() or 1))
+        elif lab:
+            sure = list(S.max(axis=1))  # similarity to the nearest labelled picture: low = something new
         else:
             sure = [0.0] * len(cands)
-        order = sorted(range(len(cands)), key=lambda r: (sure[r], -self.meta[cands[r]]["score"]))
-        seen, out = set(), []
+        order = sorted(range(len(cands)), key=lambda r: (round(float(sure[r]), 2), -self.meta[cands[r]].get("face", 0.0)))
+        by_side, seen = {"left": [], "right": []}, set()
         for r in order:
             p = cands[r]; key = (self.meta[p]["clip"], self.meta[p]["side"])
             if key not in seen:
-                seen.add(key); out.append(p)
-                if len(out) == n:
-                    break
+                seen.add(key); by_side[self.meta[p]["side"]].append(p)
+        out = []
+        while len(out) < n and (by_side["left"] or by_side["right"]):
+            for side in ("left", "right"):
+                if by_side[side] and len(out) < n:
+                    out.append(by_side[side].pop(0))
         return out
 
     def clip_cats(self, clip):
@@ -167,8 +178,14 @@ class Recognizer:
         self.load()
         from fastembed import ImageEmbedding, TextEmbedding  # slow import: only when actually running
         self.images = ImageEmbedding(MODEL, threads=cfg["threads"])
-        t = np.array(list(TextEmbedding(TEXT_MODEL, threads=cfg["threads"]).embed(["a photo of a cat", "a photo of a cat eating from a bowl", "a photo of an empty metal pet bowl on a floor"])))
+        t = np.array(list(TextEmbedding(TEXT_MODEL, threads=cfg["threads"]).embed([
+            "a photo of a cat", "a photo of a cat eating from a bowl", "a photo of an empty metal pet bowl on a floor",
+            "a photo of a cat's face with its eyes and nose", "a photo of a whole cat sitting on the floor",
+            "the top of a cat's head while it eats from a bowl"])))
         self.text = t / np.linalg.norm(t, axis=1, keepdims=True)
+        for p in self.brain.ids:  # pictures from before the "face" score existed
+            if "face" not in self.brain.meta[p]:
+                self.brain.meta[p]["face"] = self.face(self.brain.emb[self.brain.pos[p]][None])[0]
         self.last_label = None
 
     # ---- storage ----
@@ -187,6 +204,11 @@ class Recognizer:
         np.save(self.data / "emb.npy", self.brain.emb)
         (self.data / "brain.json").write_text(json.dumps({"ids": self.brain.ids, "meta": self.brain.meta, "labels": self.brain.labels}))
         (self.data / "done.json").write_text(json.dumps(sorted(self.done)))
+
+    def face(self, vecs):
+        """How much of the cat shows (face or whole body) rather than the top of its head: for choosing photos to label."""
+        s = vecs @ self.text.T
+        return [round(float(x), 4) for x in np.maximum(s[:, 3], s[:, 4]) - s[:, 5]]
 
     # ---- clips ----
 
@@ -214,9 +236,10 @@ class Recognizer:
             vecs = vecs / np.linalg.norm(vecs, axis=1, keepdims=True)
             sims = vecs @ self.text.T
             score = np.maximum(sims[:, 0], sims[:, 1]) - sims[:, 2]
+            face = self.face(vecs)
             for i, (v, m) in enumerate(zip(vecs, metas)):
                 pid = f"{rel.replace('/', '_')}_{m['side'][0]}{m['t']:03d}"
-                m.update(score=round(float(score[i]), 4), cat=bool(score[i] > self.cfg["cat_score"]))
+                m.update(score=round(float(score[i]), 4), cat=bool(score[i] > self.cfg["cat_score"]), face=face[i])
                 self.brain.add(pid, v, m)
         self.done.add(rel)
         log("processed", rel, f"{len(crops)} bowl pictures, {sum(1 for m in metas if m.get('cat'))} with a cat")
@@ -235,7 +258,9 @@ class Recognizer:
             return
         im = Image.open(tmp).convert("RGB"); w, h = im.size
         a, b = self.cfg["split"]
-        im = im.crop((0, 0, int(w * a), h) if m["side"] == "left" else (int(w * b), 0, w, h))
+        # The whole picture for context (body, fur, the other cat), with the other bowl's side dimmed.
+        dim = (int(w * a), 0, w, h) if m["side"] == "left" else (0, 0, int(w * b), h)
+        im.paste(im.crop(dim).point(lambda v: v * 0.3), dim[:2])
         part = self.learn / f".{pid}.jpg.part"
         im.save(part, "JPEG", quality=85); part.replace(dst)
 
