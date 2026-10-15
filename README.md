@@ -33,8 +33,15 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 ## What doesn't
 
 - **Camera live view, recordings, Meal Call and video cloud:** the camera uses Petlibro's proprietary peer-to-peer service, which Home Assistant can't relay.
-- **Logs start when Home Assistant starts recording:** Home Assistant's recorder keeps 10 days by default, and daily totals beyond that come from its long-term statistics. Two drinks within the same minute show as one, because the integration polls every minute.
+- **Logs:** with the integration's **Recent Activity** sensor (a small addition, proposed upstream), logs come from Petlibro's own records, with exact times and the same wording as the official app. Without it, LiberPet builds logs from Home Assistant's recorder: they start when Home Assistant starts recording, times can lag by up to a few minutes, and two drinks within the same minute show as one.
 - **Rooms:** these are Home Assistant areas. Assign each device an area there.
+- **Per-pet food and water:** Care shows the totals of each pet's linked devices. Petlibro only splits them per pet with RFID models.
+
+## Extras
+
+- **Device order:** long-press a device card on Home and drag it to rearrange.
+- **Home picture:** tap the picture button on Home to use your own photo. It stays on the phone.
+- **Appearance:** Me → Appearance switches between System, Light and Dark.
 
 ## Connecting
 
