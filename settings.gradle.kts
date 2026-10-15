@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Petlibre"
+rootProject.name = "LiberPet"
 include(":app", ":shared")

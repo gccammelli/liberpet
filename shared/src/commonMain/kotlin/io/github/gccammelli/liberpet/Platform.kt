@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre
+package io.github.gccammelli.liberpet
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
@@ -23,6 +23,8 @@ interface PlatformUi {
     val appVersion: String
     fun openUrl(url: String)
     fun toast(message: String)
+    /** Light or dark status/navigation bar icons to match the app's theme. */
+    fun setDarkBars(dark: Boolean)
 }
 
 val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No platform provided") }

@@ -1,9 +1,12 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +49,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +59,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,17 +76,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.gccammelli.petlibre.Device
-import io.github.gccammelli.petlibre.INTEGRATION_URL
-import io.github.gccammelli.petlibre.LocalPlatform
-import io.github.gccammelli.petlibre.Repo
-import io.github.gccammelli.petlibre.UiState
-import io.github.gccammelli.petlibre.fmt
-import io.github.gccammelli.petlibre.minutesOf
-import io.github.gccammelli.petlibre.plans
+import io.github.gccammelli.liberpet.Device
+import io.github.gccammelli.liberpet.INTEGRATION_URL
+import io.github.gccammelli.liberpet.LocalPlatform
+import io.github.gccammelli.liberpet.Repo
+import io.github.gccammelli.liberpet.UiState
+import io.github.gccammelli.liberpet.fmt
+import io.github.gccammelli.liberpet.minutesOf
+import io.github.gccammelli.liberpet.plans
 import kotlin.time.Clock
-import io.github.gccammelli.petlibre.local
-import io.github.gccammelli.petlibre.pad
+import io.github.gccammelli.liberpet.local
+import io.github.gccammelli.liberpet.pad
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
@@ -146,8 +160,8 @@ fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
             .forEachIndexed { i, (label, icon) ->
                 val sel = Nav.tab == i
                 Column(Modifier.weight(1f).fillMaxSize().clickable { Nav.tab = i }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(icon, label, Modifier.size(28.dp), tint = if (sel) C.Dark else Color(0xFFB3B3B3))
-                    T(label, 11.sp, if (sel) C.Dark else Color(0xFF8A8A8A), if (sel) FontWeight.Bold else FontWeight.Normal)
+                    Icon(icon, label, Modifier.size(28.dp), tint = if (sel) C.Dark else C.Faint)
+                    T(label, 11.sp, if (sel) C.Dark else C.Sub, if (sel) FontWeight.Bold else FontWeight.Normal)
                 }
             }
     }
@@ -156,7 +170,7 @@ fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
 @Composable
 fun HomeTab(st: UiState) {
     val home = st.home ?: return
-    Column(Modifier.fillMaxSize().background(Color(0xFFECECEC)).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().background(C.HomeBg).verticalScroll(rememberScrollState())) {
         Box(Modifier.fillMaxWidth().height(300.dp).background(Brush.verticalGradient(listOf(Color(0xFFB9B6B3), Color(0xFF9D9A97), Color(0xFFC9C5C0))))) {
             Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 10.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HeaderCircle(if (st.loading) Icons.Default.Refresh else Icons.Outlined.NotificationsNone) { Repo.refresh() }
@@ -168,15 +182,58 @@ fun HomeTab(st: UiState) {
             }
         }
         Column(Modifier.offset(y = (-40).dp).padding(horizontal = 17.dp)) {
-            home.devices.chunked(2).forEach { pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.Top) {
-                    pair.forEach { DeviceCard(it, st, Modifier.weight(1f)) }
-                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                }
-                Gap(13.dp)
-            }
+            ReorderableGrid(Repo.ordered(home.devices), st)
             if (st.error != null) T(st.error, 13.sp, C.Red, modifier = Modifier.padding(8.dp))
         }
+    }
+}
+
+/**
+ * The device cards, two per row. Long-press a card and drag it onto another card's spot to move it there;
+ * the order is saved on the phone. One FlowRow parent so a card keeps its gesture while it changes rows.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReorderableGrid(devices: List<Device>, st: UiState) {
+    var order by remember(devices.map { it.serial }) { mutableStateOf(devices.map { it.serial }) }
+    val bounds = remember { mutableStateMapOf<String, Rect>() }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var pointer by remember { mutableStateOf(Offset.Zero) } // in root coordinates
+    var grab by remember { mutableStateOf(Offset.Zero) } // where in the card it was picked up
+    val haptic = LocalHapticFeedback.current
+    val bySn = devices.associateBy { it.serial }
+    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(13.dp), verticalArrangement = Arrangement.spacedBy(13.dp), maxItemsInEachRow = 2) {
+        order.forEach { sn ->
+            val d = bySn[sn] ?: return@forEach
+            key(sn) {
+                val lifted = dragging == sn
+                DeviceCard(d, st, Modifier.weight(1f)
+                    .onGloballyPositioned { bounds[sn] = it.boundsInRoot() }
+                    .zIndex(if (lifted) 1f else 0f)
+                    .graphicsLayer {
+                        if (lifted) bounds[sn]?.let { b -> translationX = pointer.x - grab.x - b.left; translationY = pointer.y - grab.y - b.top }
+                        scaleX = if (lifted) 1.04f else 1f; scaleY = scaleX
+                        shadowElevation = if (lifted) 16f else 0f
+                    }
+                    .pointerInput(sn) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { p ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val b = bounds[sn] ?: return@detectDragGesturesAfterLongPress
+                                dragging = sn; grab = p; pointer = b.topLeft + p
+                            },
+                            onDrag = { c, delta ->
+                                c.consume(); pointer += delta
+                                val target = bounds.entries.firstOrNull { (k, r) -> k != sn && k in order && r.contains(pointer) }?.key
+                                if (target != null) order = order.toMutableList().apply { remove(sn); add(indexOf(target).let { if (it >= order.indexOf(sn)) it + 1 else it }, sn) }
+                            },
+                            onDragEnd = { dragging = null; Repo.saveOrder(order) },
+                            onDragCancel = { dragging = null; Repo.saveOrder(order) },
+                        )
+                    })
+            }
+        }
+        if (order.size % 2 == 1) Spacer(Modifier.weight(1f))
     }
 }
 
@@ -197,9 +254,9 @@ fun Device.irregularities(): List<String> = buildList {
 }
 
 @Composable
-fun DeviceCard(d: Device, st: UiState, modifier: Modifier) = Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color.White)
+fun DeviceCard(d: Device, st: UiState, modifier: Modifier) = Column(modifier.clip(RoundedCornerShape(10.dp)).background(C.Card)
     .clickable { Nav.go(if (d.isFeeder) Screen.Feeder(d.serial) else Screen.Fountain(d.serial)) }) {
-    Box(Modifier.fillMaxWidth().aspectRatio(.98f).background(Color(0xFFF8F8F8))) {
+    Box(Modifier.fillMaxWidth().aspectRatio(.98f).background(C.Fill)) {
         DeviceArt(d, Modifier.fillMaxSize().padding(start = 28.dp, end = 28.dp, top = 22.dp, bottom = 40.dp))
         T(d.room ?: "", 13.sp, C.Faint, modifier = Modifier.align(Alignment.BottomStart).padding(14.dp))
     }
@@ -244,7 +301,7 @@ fun StatusIcons(d: Device) = Row(horizontalArrangement = Arrangement.spacedBy(8.
 }
 
 @Composable
-fun ServicesTab() = Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding()) {
+fun ServicesTab() = Column(Modifier.fillMaxSize().background(C.Card).statusBarsPadding()) {
     Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) { T("SERVICES", 17.sp, weight = FontWeight.Medium) }
     Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.Bg).padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.ShoppingBag, null, Modifier.size(32.dp), tint = C.Dark)
@@ -263,9 +320,9 @@ fun Connect() {
     var err by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val p = LocalPlatform.current
-    Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
+    Column(Modifier.fillMaxSize().background(C.Card).statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Gap(32.dp)
-        T("Petlibre", 32.sp, weight = FontWeight.Bold)
+        T("LiberPet", 32.sp, weight = FontWeight.Bold)
         Gap(8.dp)
         T("Your Petlibro feeder and fountain, through your own Home Assistant. Home Assistant keeps the Petlibro login; this app only talks to Home Assistant.", 15.sp, C.Sub, lh = 21.sp)
         Gap(28.dp)

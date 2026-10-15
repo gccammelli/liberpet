@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Cake
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Pets
@@ -42,13 +43,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.gccammelli.petlibre.INTEGRATION_URL
-import io.github.gccammelli.petlibre.LocalPlatform
-import io.github.gccammelli.petlibre.Pet
-import io.github.gccammelli.petlibre.Repo
-import io.github.gccammelli.petlibre.UiState
-import io.github.gccammelli.petlibre.fmt
-import io.github.gccammelli.petlibre.local
+import io.github.gccammelli.liberpet.INTEGRATION_URL
+import io.github.gccammelli.liberpet.LocalPlatform
+import io.github.gccammelli.liberpet.Pet
+import io.github.gccammelli.liberpet.Repo
+import io.github.gccammelli.liberpet.UiState
+import io.github.gccammelli.liberpet.fmt
+import io.github.gccammelli.liberpet.local
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.minus
 import kotlin.time.Clock
@@ -62,7 +63,7 @@ fun CareTab(st: UiState) {
     var trend by remember { mutableStateOf<String?>(null) }
     val pet = pets.getOrNull(sel)
     Column(Modifier.fillMaxSize().background(C.Bg)) {
-        Row(Modifier.fillMaxWidth().background(Color.White).statusBarsPadding().height(64.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding().height(64.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 T("Dashboard", 20.sp, weight = FontWeight.Medium)
                 Gap(6.dp); Box(Modifier.width(92.dp).height(3.dp).background(C.Green))
@@ -190,7 +191,7 @@ fun PetScreen(p: Pet, st: UiState) {
 }
 
 @Composable
-private fun Group(content: @Composable () -> Unit) = Column(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(Color.White)) { content() }
+private fun Group(content: @Composable () -> Unit) = Column(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).background(C.Card)) { content() }
 
 @Composable
 private fun ProfileRow(label: String, value: String, required: Boolean, onClick: (() -> Unit)? = null) =
@@ -206,7 +207,7 @@ fun MeTab(st: UiState) {
     val p = LocalPlatform.current
     val pets = st.home?.pets.orEmpty()
     Column(Modifier.fillMaxSize().background(C.Bg).verticalScroll(rememberScrollState())) {
-        Column(Modifier.fillMaxWidth().background(Color.White).statusBarsPadding()) {
+        Column(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding()) {
             Box(Modifier.fillMaxWidth().height(48.dp)) {
                 Icon(Icons.Outlined.Settings, "Settings", Modifier.align(Alignment.CenterEnd).padding(end = 20.dp).size(26.dp).clickable { Nav.go(Screen.Settings) }, tint = C.Text)
             }
@@ -221,7 +222,7 @@ fun MeTab(st: UiState) {
             Gap(20.dp)
         }
         Gap(12.dp)
-        Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 20.dp, vertical = 18.dp)) {
+        Column(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 20.dp, vertical = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SmallIcon(Icons.Outlined.Pets, C.Text, 20.dp); Spacer(Modifier.width(8.dp))
                 T("My Pet", 17.sp); T(" (${pets.size})", 15.sp, C.Faint); Spacer(Modifier.weight(1f))
@@ -239,6 +240,14 @@ fun MeTab(st: UiState) {
         NavRow("Home Assistant", Repo.haUrl?.removePrefix("http://")?.removePrefix("https://"), leading = { SmallIcon(Icons.Outlined.Home, C.Text, 22.dp) }) { Repo.haUrl?.let(p::openUrl) }
         Gap(12.dp)
         NavRow("PETLIBRO integration", leading = { SmallIcon(Icons.Outlined.Extension, C.Text, 22.dp) }) { p.openUrl(INTEGRATION_URL) }
+        Gap(12.dp)
+        var pick by remember { mutableStateOf(false) }
+        val modes = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
+        NavRow("Appearance", modes.first { it.first == ThemeMode.mode }.second, leading = { SmallIcon(Icons.Outlined.DarkMode, C.Text, 22.dp) }) { pick = true }
+        if (pick) Sheet({ pick = false }, "APPEARANCE", confirm = null) {
+            modes.forEach { (k, label) -> Radio(ThemeMode.mode == k, label) { Repo.setTheme(k); pick = false } }
+            Gap(24.dp)
+        }
         Gap(12.dp)
         NavRow("About", "V${p.appVersion}", leading = { SmallIcon(Icons.Outlined.Info, C.Text, 22.dp) }, chevron = false)
     }

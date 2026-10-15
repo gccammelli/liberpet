@@ -9,10 +9,10 @@
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="Petlibre"
+        android:label="LiberPet"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.Petlibre">
+        android:theme="@style/Theme.LiberPet">
         <activity
             android:name=".MainActivity"
             android:exported="true"

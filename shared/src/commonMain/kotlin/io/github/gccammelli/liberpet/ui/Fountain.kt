@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -49,15 +49,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import io.github.gccammelli.petlibre.Device
-import io.github.gccammelli.petlibre.Pet
-import io.github.gccammelli.petlibre.Repo
-import io.github.gccammelli.petlibre.UiState
-import io.github.gccammelli.petlibre.dispensingModes
-import io.github.gccammelli.petlibre.dur
-import io.github.gccammelli.petlibre.fmt
-import io.github.gccammelli.petlibre.local
-import io.github.gccammelli.petlibre.pad
+import io.github.gccammelli.liberpet.Device
+import io.github.gccammelli.liberpet.Pet
+import io.github.gccammelli.liberpet.Repo
+import io.github.gccammelli.liberpet.UiState
+import io.github.gccammelli.liberpet.dispensingModes
+import io.github.gccammelli.liberpet.dur
+import io.github.gccammelli.liberpet.fmt
+import io.github.gccammelli.liberpet.local
+import io.github.gccammelli.liberpet.pad
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -77,11 +77,11 @@ fun FountainScreen(d: Device, st: UiState) {
         BottomActions(listOf(Triple("Flow Type", Icons.Default.WaterDrop) { flow = true }, Triple("Hydration History", Icons.Default.BarChart) { Nav.go(Screen.WaterIntake(d.serial)) }))
     }) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            Column(Modifier.fillMaxWidth().background(Color.White)) {
+            Column(Modifier.fillMaxWidth().background(C.Card)) {
                 RoomLine(d)
                 val irr = d.irregularities()
                 if (irr.isNotEmpty()) Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clip(RoundedCornerShape(6.dp)).border(1.dp, C.Red, RoundedCornerShape(6.dp))
-                    .background(Color(0xFFFFF4F4)).clickable { remind = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .background(C.RedBg).clickable { remind = true }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(15.dp).clip(CircleShape).background(C.Red), contentAlignment = Alignment.Center) { Icon(Icons.Default.PriorityHigh, null, Modifier.size(11.dp), tint = Color.White) }
                     Spacer(Modifier.width(6.dp)); T("${irr.size} Irregularities Detected", 13.sp, C.Red, modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp), tint = C.Red)
@@ -186,9 +186,9 @@ fun StepCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Col
 
 @Composable
 fun ReminderDialog(onDismiss: () -> Unit) = Dialog(onDismiss) {
-    Column(Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFE6E8EA)).padding(24.dp)) {
+    Column(Modifier.clip(RoundedCornerShape(6.dp)).background(C.Dialog).padding(24.dp)) {
         T("Important Reminder", 18.sp, weight = FontWeight.Medium, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
-        Gap(14.dp); Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFD0D2D4))); Gap(18.dp)
+        Gap(14.dp); Box(Modifier.fillMaxWidth().height(1.dp).background(C.Track)); Gap(18.dp)
         listOf(Icons.Outlined.CleaningServices to ("Cleaning reminder" to "Please clean it in time to keep your pet's drinking water healthy."),
             Icons.Outlined.FilterAlt to ("Replacement reminder" to "Please replace the filter on time to ensure your pet is drinking clean water. Reset the filter cycle after replacing the filter."))
             .forEach { (icon, tb) ->
@@ -199,8 +199,8 @@ fun ReminderDialog(onDismiss: () -> Unit) = Dialog(onDismiss) {
                 Gap(18.dp)
             }
         Gap(8.dp)
-        Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(4.dp)).background(Color.Black).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-            T("Previous Step", 17.sp, Color.White)
+        Box(Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(4.dp)).background(C.Dark).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+            T("Previous Step", 17.sp, C.OnDark)
         }
     }
 }
@@ -237,7 +237,7 @@ private fun FlowOption(title: String, sub: String, selected: Boolean, chevron: B
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).border(if (selected) 2.dp else 1.dp, if (selected) C.Green else C.Line, RoundedCornerShape(4.dp))
         .clickable(onClick = onClick).padding(vertical = 18.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(if (selected) C.Green else Color(0xFFE5E5E5)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(if (selected) C.Green else C.Track2), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.InvertColors, null, Modifier.size(22.dp), tint = Color.White)
             }
             Gap(10.dp)
@@ -256,9 +256,9 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
     val g = goal(d, st)
     var range by remember { mutableStateOf(0) }
     var anchor by remember { mutableStateOf(today) }
-    Page("Petlibre", { Nav.back() }, bg = C.Bg) {
+    Page("LiberPet", { Nav.back() }, bg = C.Bg) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-          T("WATER INTAKE", 30.sp, weight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().background(Color.White).padding(start = 16.dp, top = 10.dp, bottom = 22.dp))
+          T("WATER INTAKE", 30.sp, weight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().background(C.Card).padding(start = 16.dp, top = 10.dp, bottom = 22.dp))
           Gap(14.dp)
           Column(Modifier.padding(horizontal = 16.dp)) {
             Caps("TODAY")
@@ -291,7 +291,7 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
                         val day = today.minus(DatePeriod(days = back))
                         val v = daily[day] ?: 0.0
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Ring(if (g > 0) (v / g).toFloat() else 0f, C.Brown, Modifier.size(34.dp), stroke = 4.dp, track = Color(0xFFE3E3E3))
+                            Ring(if (g > 0) (v / g).toFloat() else 0f, C.Brown, Modifier.size(34.dp), stroke = 4.dp, track = C.Track2)
                             Gap(4.dp); T("${pad(day.day)}/${pad(day.month.ordinal + 1)}", 11.sp, C.Faint)
                         }
                     }
@@ -304,9 +304,9 @@ fun WaterIntakeScreen(d: Device, st: UiState) {
             Gap(18.dp)
             Caps("HISTORY")
             Card(padding = PaddingValues(16.dp)) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(Color(0xFFEFEFEF)).padding(3.dp)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.Fill).padding(3.dp)) {
                     listOf("td.", "wk.", "mth.", "yr.").forEachIndexed { i, s ->
-                        Box(Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(5.dp)).background(if (range == i) Color.White else Color.Transparent)
+                        Box(Modifier.weight(1f).height(32.dp).clip(RoundedCornerShape(5.dp)).background(if (range == i) C.Card else Color.Transparent)
                             .clickable { range = i; anchor = today }, contentAlignment = Alignment.Center) { T(s, 14.sp) }
                     }
                 }
@@ -336,7 +336,7 @@ private fun DayBar(label: String, v: Double, top: Double) = Column {
 }
 
 /** Bars and axis labels for td. (hours, from the drink log), wk. (7 days), mth. (days), yr. (months). */
-fun historyBars(range: Int, anchor: LocalDate, daily: Map<LocalDate, Double>, drinks: List<io.github.gccammelli.petlibre.LogEntry>): Pair<List<Double>, List<String>> = when (range) {
+fun historyBars(range: Int, anchor: LocalDate, daily: Map<LocalDate, Double>, drinks: List<io.github.gccammelli.liberpet.LogEntry>): Pair<List<Double>, List<String>> = when (range) {
     0 -> {
         val ml = Regex("""drank ([\d.]+) ml""")
         val byHour = DoubleArray(24)
@@ -359,7 +359,7 @@ fun Chart(values: List<Double>, labels: List<String>) {
         Canvas(Modifier.weight(1f).fillMaxSize()) {
             val w = size.width / values.size
             var x = 0f
-            while (x < size.width) { drawCircle(Color(0xFFBDBDBD), 1.5f, Offset(x, size.height - 1)); x += 12f }
+            while (x < size.width) { drawCircle(C.Dot, 1.5f, Offset(x, size.height - 1)); x += 12f }
             values.forEachIndexed { i, v ->
                 if (v > 0) {
                     val h = (v / top * (size.height - 12)).toFloat()
@@ -385,7 +385,7 @@ fun FountainSettingsScreen(d: Device, st: UiState) {
             Gap(12.dp)
             SettingsHeader(d)
             Gap(12.dp)
-            Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 24.dp, vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("Measurement Unit", 17.sp, modifier = Modifier.weight(1f))
                 T("○ oz   ", 13.sp, C.Faint); T("◉ ml", 13.sp, C.Tan)
             }
@@ -420,7 +420,7 @@ fun GoalScreen(d: Device, st: UiState) {
     val err = errorToast()
     val pets = linkedPets(d, st)
     var total by remember { mutableStateOf(goal(d, st).toInt()) }
-    Page("", { Nav.back() }, bg = Color.White) {
+    Page("", { Nav.back() }, bg = C.Card) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
             T("Daily Hydration Goal", 28.sp, weight = FontWeight.Bold)
             Gap(6.dp); T("Modify your device's daily goal for all pets.", 14.sp, C.Sub)
@@ -433,8 +433,8 @@ fun GoalScreen(d: Device, st: UiState) {
                 StepCircle(Icons.Default.Add, C.Green, 48.dp) { total += 10 }
             }
             Gap(40.dp)
-            Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFF7F7F7))) {
-                Row(Modifier.fillMaxWidth().background(Color(0xFFEDEDED)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Column(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Fill)) {
+                Row(Modifier.fillMaxWidth().background(C.Fill).padding(horizontal = 16.dp, vertical = 10.dp)) {
                     T("Linked Pets", 12.sp, modifier = Modifier.weight(1f)); T("Drinking Goal", 12.sp)
                 }
                 pets.forEach { p ->

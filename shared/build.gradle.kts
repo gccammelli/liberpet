@@ -39,7 +39,7 @@ kotlin {
 }
 
 android {
-    namespace = "io.github.gccammelli.petlibre.shared"
+    namespace = "io.github.gccammelli.liberpet.shared"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
     compileOptions {
@@ -49,5 +49,5 @@ android {
 }
 
 compose.resources {
-    packageOfResClass = "io.github.gccammelli.petlibre.res"
+    packageOfResClass = "io.github.gccammelli.liberpet.res"
 }

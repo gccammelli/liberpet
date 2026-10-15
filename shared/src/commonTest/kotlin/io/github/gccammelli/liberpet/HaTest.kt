@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre
+package io.github.gccammelli.liberpet
 
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject

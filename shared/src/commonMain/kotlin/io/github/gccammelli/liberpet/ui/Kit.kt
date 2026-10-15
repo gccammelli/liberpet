@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -33,7 +33,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.github.gccammelli.liberpet.LocalPlatform
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -53,29 +60,53 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Colours sampled from the Petlibro app. */
+/** "system", "light" or "dark"; the app's choice, saved by Repo. */
+object ThemeMode {
+    var mode by mutableStateOf("system")
+    /** What's on screen now (set by [AppTheme]). */
+    var dark by mutableStateOf(false)
+}
+
+/** Colours: light ones sampled from the Petlibro app; dark ones are LiberPet's own (Petlibro has no dark mode). */
 object C {
-    val Bg = Color(0xFFF5F5F5)
-    val Card = Color.White
-    val Text = Color(0xFF33383D)
-    val Sub = Color(0xFF999999)
-    val Faint = Color(0xFFAEAEAE)
-    val Green = Color(0xFF315800)
-    val Brown = Color(0xFF966E5A)
-    val Tan = Color(0xFFD6B79B)
-    val Red = Color(0xFFF5494C)
-    val Dark = Color(0xFF2A2A2A)
-    val Track = Color(0xFFDBDBDB)
-    val Line = Color(0xFFEDEDED)
-    val Nav = Color(0xFFF8F8F8)
-    val Blue = Color(0xFF1677FF)
+    private fun c(light: Long, dark: Long) = Color(if (ThemeMode.dark) dark else light)
+    val Bg get() = c(0xFFF5F5F5, 0xFF121212)
+    val Card get() = c(0xFFFFFFFF, 0xFF1E1E1E)
+    val Text get() = c(0xFF33383D, 0xFFE6E6E6)
+    val Sub get() = c(0xFF999999, 0xFFA3A3A3)
+    val Faint get() = c(0xFFAEAEAE, 0xFF7C7C7C)
+    val Green get() = c(0xFF315800, 0xFF7FA84A)
+    val Brown get() = c(0xFF966E5A, 0xFFC09078)
+    val Tan get() = c(0xFFD6B79B, 0xFFC9A27E)
+    val Red get() = c(0xFFF5494C, 0xFFFF6B6B)
+    val RedBg get() = c(0xFFFFF4F4, 0xFF3A1E1F)
+    /** Primary buttons, checked switches; [OnDark] is the text on them. */
+    val Dark get() = c(0xFF2A2A2A, 0xFFE6E6E6)
+    val OnDark get() = c(0xFFFFFFFF, 0xFF1A1A1A)
+    val Thumb get() = c(0xFFFFFFFF, 0xFFBDBDBD)
+    val Track get() = c(0xFFDBDBDB, 0xFF3A3A3A)
+    val Track2 get() = c(0xFFE8E8E8, 0xFF333333)
+    val Fill get() = c(0xFFF7F7F7, 0xFF262626)
+    val Line get() = c(0xFFEDEDED, 0xFF2C2C2C)
+    val Dot get() = c(0xFFBDBDBD, 0xFF555555)
+    val Nav get() = c(0xFFF8F8F8, 0xFF1A1A1A)
+    val HomeBg get() = c(0xFFECECEC, 0xFF161616)
+    val Dialog get() = c(0xFFE6E8EA, 0xFF2A2A2A)
+    val Blue get() = c(0xFF1677FF, 0xFF5AA2FF)
 }
 
 @Composable
-fun AppTheme(content: @Composable () -> Unit) = MaterialTheme(
-    colorScheme = lightColorScheme(primary = C.Dark, background = C.Bg, surface = C.Card, onSurface = C.Text, onBackground = C.Text),
-    content = content,
-)
+fun AppTheme(content: @Composable () -> Unit) {
+    val system = isSystemInDarkTheme()
+    ThemeMode.dark = when (ThemeMode.mode) { "light" -> false; "dark" -> true; else -> system }
+    val p = LocalPlatform.current
+    LaunchedEffect(ThemeMode.dark) { p.setDarkBars(ThemeMode.dark) }
+    MaterialTheme(
+        colorScheme = (if (ThemeMode.dark) darkColorScheme() else lightColorScheme())
+            .copy(primary = C.Dark, onPrimary = C.OnDark, background = C.Bg, surface = C.Card, onSurface = C.Text, onBackground = C.Text, onSurfaceVariant = C.Sub),
+        content = content,
+    )
+}
 
 @Composable
 fun T(text: String, size: TextUnit = 16.sp, color: Color = C.Text, weight: FontWeight = FontWeight.Normal, modifier: Modifier = Modifier, align: TextAlign? = null, lh: TextUnit = TextUnit.Unspecified) =
@@ -85,7 +116,7 @@ fun T(text: String, size: TextUnit = 16.sp, color: Color = C.Text, weight: FontW
 @Composable
 fun Page(title: String, onBack: (() -> Unit)?, bg: Color = C.Bg, action: (@Composable () -> Unit)? = null, bottom: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().background(bg)) {
-        Box(Modifier.fillMaxWidth().background(Color.White).statusBarsPadding().height(56.dp)) {
+        Box(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding().height(56.dp)) {
             if (onBack != null) BackChevron(onBack, Modifier.align(Alignment.CenterStart))
             T(title, 18.sp, weight = FontWeight.Medium, modifier = Modifier.align(Alignment.Center).padding(horizontal = 56.dp), align = TextAlign.Center)
             if (action != null) Box(Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)) { action() }
@@ -99,7 +130,7 @@ fun Page(title: String, onBack: (() -> Unit)?, bg: Color = C.Bg, action: (@Compo
 @Composable
 fun BigTitlePage(title: String, onBack: () -> Unit, bg: Color = C.Bg, bottom: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().background(bg)) {
-        Column(Modifier.fillMaxWidth().background(Color.White).statusBarsPadding()) {
+        Column(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding()) {
             Box(Modifier.height(56.dp)) { BackChevron(onBack, Modifier.align(Alignment.CenterStart)) }
             T(title, 32.sp, weight = FontWeight.Bold, modifier = Modifier.padding(start = 26.dp, bottom = 14.dp))
         }
@@ -122,7 +153,7 @@ fun Card(modifier: Modifier = Modifier, radius: Dp = 12.dp, padding: PaddingValu
 /** A settings row: label, grey value, chevron. */
 @Composable
 fun NavRow(label: String, value: String? = null, labelColor: Color = C.Text, chevron: Boolean = true, leading: (@Composable () -> Unit)? = null, onClick: (() -> Unit)? = null) =
-    Row(Modifier.fillMaxWidth().background(Color.White).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 24.dp, vertical = 22.dp),
+    Row(Modifier.fillMaxWidth().background(C.Card).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 24.dp, vertical = 22.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (leading != null) { leading(); Spacer(Modifier.width(10.dp)) }
         if (label.startsWith("*")) T("*", 17.sp, C.Red) // required field, as Petlibro marks it
@@ -133,16 +164,16 @@ fun NavRow(label: String, value: String? = null, labelColor: Color = C.Text, che
 
 @Composable
 fun ToggleRow(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
-    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         T(label, 17.sp, modifier = Modifier.weight(1f))
         Toggle(checked, enabled, onChange)
     }
 
 @Composable
 fun Toggle(checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) = Switch(checked, onChange, enabled = enabled,
-    colors = SwitchDefaults.colors(checkedTrackColor = C.Dark, checkedThumbColor = Color.White, uncheckedTrackColor = Color(0xFFE9E9EA),
-        uncheckedThumbColor = Color.White, uncheckedBorderColor = Color(0xFFE9E9EA), checkedBorderColor = C.Dark,
-        disabledCheckedTrackColor = C.Dark.copy(alpha = .4f), disabledUncheckedTrackColor = Color(0xFFF0F0F0)))
+    colors = SwitchDefaults.colors(checkedTrackColor = C.Dark, checkedThumbColor = C.OnDark, uncheckedTrackColor = C.Track2,
+        uncheckedThumbColor = C.OnDark, uncheckedBorderColor = C.Track2, checkedBorderColor = C.Dark,
+        disabledCheckedTrackColor = C.Dark.copy(alpha = .4f), disabledUncheckedTrackColor = C.Fill))
 
 /** The grey gap between grouped white sections. */
 @Composable
@@ -152,12 +183,12 @@ fun Gap(h: Dp = 12.dp) = Spacer(Modifier.height(h))
 fun DarkButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) =
     Box(modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).background(if (enabled) C.Dark else C.Dark.copy(alpha = .4f))
         .clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        T(text, 17.sp, Color.White)
+        T(text, 17.sp, C.OnDark)
     }
 
 @Composable
 fun OutlineButton(text: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) =
-    Box(modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, color, RoundedCornerShape(8.dp)).background(Color.White)
+    Box(modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, color, RoundedCornerShape(8.dp)).background(C.Card)
         .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         T(text, 16.sp, color)
     }
@@ -166,7 +197,7 @@ fun OutlineButton(text: String, color: Color, modifier: Modifier = Modifier, onC
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Sheet(onDismiss: () -> Unit, title: String? = null, centeredTitle: Boolean = false, confirm: String? = "Confirm", onConfirm: () -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
-    ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Color.White,
+    ModalBottomSheet(onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = C.Card,
         dragHandle = null, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp)) {
             Box(Modifier.fillMaxWidth().height(64.dp)) {
@@ -209,7 +240,7 @@ fun RowScope.Fill() = Spacer(Modifier.weight(1f))
 
 @Composable
 fun Radio(selected: Boolean, label: String, enabled: Boolean = true, onClick: () -> Unit) =
-    Row(Modifier.fillMaxWidth().background(Color.White).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 24.dp, vertical = 20.dp),
+    Row(Modifier.fillMaxWidth().background(C.Card).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 24.dp, vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(18.dp).clip(CircleShape).border(1.dp, if (selected) C.Tan else C.Faint, CircleShape), contentAlignment = Alignment.Center) {
             if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(C.Tan))

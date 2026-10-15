@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -26,8 +26,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.gccammelli.petlibre.Device
-import io.github.gccammelli.petlibre.decodeImage
+import io.github.gccammelli.liberpet.Device
+import io.github.gccammelli.liberpet.decodeImage
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.readRawBytes

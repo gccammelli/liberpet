@@ -1,11 +1,11 @@
-# Petlibre
+# LiberPet
 
 An open-source app for PETLIBRO feeders and fountains that talks only to **your own Home Assistant**, never to Petlibro's cloud.
 Its screens follow the official Petlibro app's layout, so it feels familiar.
 
 Home Assistant holds the Petlibro login through the community
 [PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) (install it from HACS).
-Petlibro allows one login per account, so the official app gets signed out once Home Assistant is logged in. Petlibre replaces it.
+Petlibro allows one login per account, so the official app gets signed out once Home Assistant is logged in. LiberPet replaces it.
 
 ## What works
 
@@ -46,4 +46,4 @@ Enter your Home Assistant address and a long-lived access token (your profile â†
 ./gradlew :app:assembleDebug
 ```
 
-Petlibre is not affiliated with PETLIBRO. PETLIBRO is a trademark of its owner. The device pictures are simple drawings, not Petlibro's photos.
+LiberPet is not affiliated with PETLIBRO. PETLIBRO is a trademark of its owner. The device pictures are simple drawings, not Petlibro's photos.

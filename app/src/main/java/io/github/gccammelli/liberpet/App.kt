@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre
+package io.github.gccammelli.liberpet
 
 import android.app.Application
 

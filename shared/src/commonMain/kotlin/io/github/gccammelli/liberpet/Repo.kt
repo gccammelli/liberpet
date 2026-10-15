@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre
+package io.github.gccammelli.liberpet
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +35,7 @@ object Repo {
     fun init(s: PlatformStorage) {
         if (::store.isInitialized) return
         store = s
+        io.github.gccammelli.liberpet.ui.ThemeMode.mode = s.settings.getString("theme") ?: "system"
         val url = s.settings.getString("ha_url")
         val token = s.secrets.get("ha_token")
         if (url != null && token != null) { ha = HaHttp(url, token); state.value = UiState(on = true) }
@@ -56,11 +57,22 @@ object Repo {
     fun logout() {
         store.secrets.set("ha_token", null)
         store.settings.clear()
+        store.settings.putString("theme", io.github.gccammelli.liberpet.ui.ThemeMode.mode)
         ha = null
         state.value = UiState()
     }
 
     fun refresh() = scope.launch { load() }
+
+    /** Devices in the order the user arranged on Home; new ones go at the end. */
+    fun ordered(devices: List<Device>): List<Device> {
+        val saved = store.settings.getString("device_order")?.split(",").orEmpty()
+        return devices.sortedBy { d -> saved.indexOf(d.serial).let { if (it < 0) Int.MAX_VALUE else it } }
+    }
+
+    fun setTheme(mode: String) { io.github.gccammelli.liberpet.ui.ThemeMode.mode = mode; store.settings.putString("theme", mode) }
+
+    fun saveOrder(serials: List<String>) = store.settings.putString("device_order", serials.joinToString(","))
 
     private suspend fun load() {
         val b = ha ?: return

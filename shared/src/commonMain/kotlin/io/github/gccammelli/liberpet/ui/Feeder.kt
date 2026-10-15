@@ -1,4 +1,4 @@
-package io.github.gccammelli.petlibre.ui
+package io.github.gccammelli.liberpet.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -65,22 +65,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.gccammelli.petlibre.Device
-import io.github.gccammelli.petlibre.LocalPlatform
-import io.github.gccammelli.petlibre.LogEntry
-import io.github.gccammelli.petlibre.Plan
-import io.github.gccammelli.petlibre.Repo
-import io.github.gccammelli.petlibre.UiState
-import io.github.gccammelli.petlibre.fmt
-import io.github.gccammelli.petlibre.gramsPerPortion
-import io.github.gccammelli.petlibre.local
-import io.github.gccammelli.petlibre.minutesOf
-import io.github.gccammelli.petlibre.petlibro
+import io.github.gccammelli.liberpet.Device
+import io.github.gccammelli.liberpet.LocalPlatform
+import io.github.gccammelli.liberpet.LogEntry
+import io.github.gccammelli.liberpet.Plan
+import io.github.gccammelli.liberpet.Repo
+import io.github.gccammelli.liberpet.UiState
+import io.github.gccammelli.liberpet.fmt
+import io.github.gccammelli.liberpet.gramsPerPortion
+import io.github.gccammelli.liberpet.local
+import io.github.gccammelli.liberpet.minutesOf
+import io.github.gccammelli.liberpet.petlibro
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import io.github.gccammelli.petlibre.pad
-import io.github.gccammelli.petlibre.plans
-import io.github.gccammelli.petlibre.scheduleEnabled
+import io.github.gccammelli.liberpet.pad
+import io.github.gccammelli.liberpet.plans
+import io.github.gccammelli.liberpet.scheduleEnabled
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -134,14 +134,14 @@ fun GearButton(onClick: () -> Unit) = Box(Modifier.size(44.dp).clickable(onClick
 }
 
 @Composable
-fun RoomLine(d: Device) = Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 26.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+fun RoomLine(d: Device) = Row(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 26.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
     T(d.room ?: "", 16.sp, C.Sub, modifier = Modifier.weight(1f))
     StatusIcons(d)
 }
 
 /** The camera stream uses Petlibro's proprietary P2P service, which Home Assistant can't relay. */
 @Composable
-fun CameraCard() = Column(Modifier.fillMaxWidth().background(Color.White).padding(top = 8.dp)) {
+fun CameraCard() = Column(Modifier.fillMaxWidth().background(C.Card).padding(top = 8.dp)) {
     Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().aspectRatio(16 / 9f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
         T("Live view isn't available through Home Assistant", 13.sp, Color(0xFF9A9A9A))
     }
@@ -235,7 +235,7 @@ fun StatusLine(icon: ImageVector, label: String, remaining: Double?, cycle: Doub
 
 @Composable
 fun BottomActions(items: List<Triple<String, ImageVector, () -> Unit>>) =
-    Row(Modifier.fillMaxWidth().background(Color.White).navigationBarsPadding().height(76.dp)) {
+    Row(Modifier.fillMaxWidth().background(C.Card).navigationBarsPadding().height(76.dp)) {
         items.forEach { (label, icon, go) ->
             Column(Modifier.weight(1f).fillMaxSize().clickable(onClick = go), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(icon, label, Modifier.size(32.dp), tint = C.Text)
@@ -288,7 +288,7 @@ fun TimelineRow(time: String, text: String, last: Boolean) = Row(Modifier.fillMa
         Canvas(Modifier.fillMaxSize()) {
             if (!last) {
                 var y = 18f
-                while (y < size.height) { drawLine(Color(0xFFBDBDBD), Offset(size.width / 2, y), Offset(size.width / 2, y + 4f), 2f); y += 9f }
+                while (y < size.height) { drawLine(C.Dot, Offset(size.width / 2, y), Offset(size.width / 2, y + 4f), 2f); y += 9f }
             }
             drawCircle(C.Green, 7f, Offset(size.width / 2, 22f))
         }
@@ -305,7 +305,7 @@ fun LogsScreen(d: Device, st: UiState) {
             entries.groupBy { it.at.local().date }.forEach { (day, list) ->
                 Gap(12.dp)
                 var open by remember(day) { mutableStateOf(true) }
-                Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 22.dp, vertical = 16.dp)) {
+                Column(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 22.dp, vertical = 16.dp)) {
                     val (label, date) = dayTitle(day)
                     Row(Modifier.fillMaxWidth().clickable { open = !open }) {
                         Column(Modifier.weight(1f)) {
@@ -342,7 +342,7 @@ fun AmountSheet(title: String, portions: Int, step: Int, onDismiss: () -> Unit, 
             Canvas(Modifier.size(width = 90.dp, height = 90.dp)) {
                 val w = size.width; val h = size.height
                 val cup = Path().apply { moveTo(0f, 0f); lineTo(w, 0f); lineTo(w * .85f, h); lineTo(w * .15f, h); close() }
-                drawPath(cup, Color(0xFFDDDDDD))
+                drawPath(cup, C.Track2)
                 val f = portions / max.toFloat()
                 val top = h - (h * .1f + h * .9f * f)
                 val inset = w * .15f * top / h // the cup's side at that height
@@ -352,13 +352,13 @@ fun AmountSheet(title: String, portions: Int, step: Int, onDismiss: () -> Unit, 
             Gap(12.dp)
             T("${portions * step} g", 17.sp, weight = FontWeight.Medium)
             Gap(18.dp)
-            Row(Modifier.fillMaxWidth().clip(CircleShape).background(Color(0xFFF7F7F7)).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clip(CircleShape).background(C.Fill).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundStep(Icons.Default.Remove) { if (portions > 1) onChange(portions - 1) }
                 Slider(portions.toFloat(), { onChange(it.toInt().coerceIn(1, max)) }, Modifier.weight(1f).padding(horizontal = 8.dp), valueRange = 1f..max.toFloat(), steps = max - 2,
-                    colors = SliderDefaults.colors(activeTrackColor = Color(0xFFE8E8E8), inactiveTrackColor = Color(0xFFE8E8E8),
+                    colors = SliderDefaults.colors(activeTrackColor = C.Track2, inactiveTrackColor = C.Track2,
                         activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
-                    thumb = { Box(Modifier.size(26.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Color.White)) },
-                    track = { Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Color(0xFFE8E8E8))) })
+                    thumb = { Box(Modifier.size(26.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(C.Card)) },
+                    track = { Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(C.Track2)) })
                 RoundStep(Icons.Default.Add) { if (portions < max) onChange(portions + 1) }
             }
         }
@@ -366,7 +366,7 @@ fun AmountSheet(title: String, portions: Int, step: Int, onDismiss: () -> Unit, 
 
 @Composable
 private fun RoundStep(icon: ImageVector, onClick: () -> Unit) =
-    Box(Modifier.size(46.dp).clip(CircleShape).background(Color.White).border(1.dp, C.Line, CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(46.dp).clip(CircleShape).background(C.Card).border(1.dp, C.Line, CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, null, Modifier.size(22.dp), tint = C.Text)
     }
 
@@ -389,7 +389,7 @@ fun ScheduleScreen(d: Device) {
             ToggleRow("Feeding Schedule", d.scheduleEnabled) { Repo.toggleSchedule(d, it, err) }
             d.plans.sortedBy { minutesOf(it.time) }.forEach { p ->
                 Gap(12.dp)
-                Column(Modifier.fillMaxWidth().background(Color.White).clickable { Nav.go(Screen.PlanEdit(d.serial, p.id)) }.padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 18.dp)) {
+                Column(Modifier.fillMaxWidth().background(C.Card).clickable { Nav.go(Screen.PlanEdit(d.serial, p.id)) }.padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         T(p.time, 26.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Toggle(p.enabled) { Repo.togglePlan(d, p, it, err) }
@@ -425,7 +425,7 @@ fun PlanEditScreen(d: Device, plan: Plan?) {
             Divider()
             NavRow("Label", label.ifBlank { "1–20 characters in length" }) { sheet = "label" }
             Gap(12.dp)
-            Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 20.dp)) {
+            Column(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 16.dp, vertical = 20.dp)) {
                 DarkButton("Save") { Repo.setPlan(d, plan, time, portions, days, label, err); Nav.back() }
                 if (plan != null) { Gap(12.dp); OutlineButton("DELETE", C.Red) { Repo.deletePlan(d, plan, err); Nav.back() } }
             }
@@ -446,14 +446,14 @@ fun PlanEditScreen(d: Device, plan: Plan?) {
 }
 
 @Composable
-fun Divider() = Box(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 24.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line)) }
+fun Divider() = Box(Modifier.fillMaxWidth().background(C.Card).padding(horizontal = 24.dp)) { Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line)) }
 
 @Composable
 fun RepeatSheet(days: List<Int>, onDismiss: () -> Unit, onPick: (List<Int>) -> Unit) {
     var sel by remember { mutableStateOf(days) }
     val mode = when { sel.isEmpty() -> 0; sel.toSet() == (1..7).toSet() -> 1; else -> 2 }
     Sheet(onDismiss, "REPEAT", onConfirm = { onPick(sel) }) {
-        Column(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFF7F7F7))) {
+        Column(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Fill)) {
             listOf("Never", "Everyday", "Custom").forEachIndexed { i, s ->
                 Row(Modifier.fillMaxWidth().clickable { sel = when (i) { 0 -> emptyList(); 1 -> (1..7).toList(); else -> if (mode == 2) sel else listOf(1, 2, 3, 4, 5) } }.padding(horizontal = 18.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -468,9 +468,9 @@ fun RepeatSheet(days: List<Int>, onDismiss: () -> Unit, onPick: (List<Int>) -> U
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 (1..7).forEach { day ->
                     val on = day in sel
-                    Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(8.dp)).background(if (on) C.Dark else Color(0xFFF2F2F2))
+                    Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(8.dp)).background(if (on) C.Dark else C.Fill)
                         .clickable { sel = if (on) sel - day else sel + day }, contentAlignment = Alignment.Center) {
-                        T(DOW[day - 1].take(2), 13.sp, if (on) Color.White else C.Text)
+                        T(DOW[day - 1].take(2), 13.sp, if (on) C.OnDark else C.Text)
                     }
                 }
             }
@@ -486,7 +486,7 @@ fun TimeSheet(time: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     var m by remember { mutableStateOf(m0) }
     Sheet(onDismiss, "Feeding Time", centeredTitle = true, onConfirm = { onPick("${pad(h)}:${pad(m)}") }) {
         Box(Modifier.fillMaxWidth().height(200.dp)) {
-            Box(Modifier.align(Alignment.Center).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF2F2F2)))
+            Box(Modifier.align(Alignment.Center).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(8.dp)).background(C.Fill))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center) {
                 Wheel(24, h, Modifier.width(60.dp)) { h = it }
                 Wheel(60, m, Modifier.width(60.dp)) { m = it }
@@ -515,7 +515,7 @@ fun Wheel(count: Int, value: Int, modifier: Modifier, onChange: (Int) -> Unit) {
 // ---------- Settings ----------
 
 @Composable
-fun SettingsHeader(d: Device) = Row(Modifier.fillMaxWidth().background(Color.White).clickable { Nav.go(Screen.About(d.serial)) }.padding(horizontal = 20.dp, vertical = 18.dp),
+fun SettingsHeader(d: Device) = Row(Modifier.fillMaxWidth().background(C.Card).clickable { Nav.go(Screen.About(d.serial)) }.padding(horizontal = 20.dp, vertical = 18.dp),
     verticalAlignment = Alignment.CenterVertically) {
     DeviceArt(d, Modifier.size(56.dp))
     Spacer(Modifier.width(14.dp))
@@ -580,11 +580,11 @@ fun FirmwareSheet(d: Device, onDismiss: () -> Unit) = Sheet(onDismiss, "Firmware
 @Composable
 fun AboutScreen(d: Device) = Page("About Device", { Nav.back() }) {
     Column(Modifier.padding(16.dp)) {
-        Column(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFFF7F7F7))) {
+        Column(Modifier.clip(RoundedCornerShape(10.dp)).background(C.Fill)) {
             KV("Name", d.name); KV("Room", d.room ?: "--"); KV("Model", d.model)
         }
         Gap(12.dp)
-        Column(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFFF7F7F7))) {
+        Column(Modifier.clip(RoundedCornerShape(10.dp)).background(C.Fill)) {
             KV("SN", d.serial); KV("Firmware Version", d.firmware ?: "--"); KV("Wi-Fi", d.state("wifi_ssid") ?: "--"); KV("Signal", d.state("wifi_rssi")?.let { "$it dBm" } ?: "--")
         }
         Gap(12.dp)
