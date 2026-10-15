@@ -97,6 +97,8 @@ import kotlin.time.Instant
 sealed interface Screen {
     data class Feeder(val sn: String) : Screen
     data class CameraFull(val sn: String) : Screen
+    data class Gallery(val sn: String) : Screen
+    data class Clip(val sn: String, val id: String, val title: String) : Screen
     data class Schedule(val sn: String) : Screen
     data class PlanEdit(val sn: String, val planId: Long?) : Screen
     data class FeederSettings(val sn: String) : Screen
@@ -133,6 +135,8 @@ fun Root() {
         null -> Tabs(st)
         is Screen.Feeder -> dev(s.sn)?.let { FeederScreen(it, st) }
         is Screen.CameraFull -> dev(s.sn)?.let { CameraFullScreen(it, st) }
+        is Screen.Gallery -> dev(s.sn)?.let { GalleryScreen(it, st) }
+        is Screen.Clip -> ClipScreen(s.id, s.title)
         is Screen.Schedule -> dev(s.sn)?.let { ScheduleScreen(it) }
         is Screen.PlanEdit -> dev(s.sn)?.let { PlanEditScreen(it, it.plansById(s.planId)) }
         is Screen.FeederSettings -> dev(s.sn)?.let { FeederSettingsScreen(it) }

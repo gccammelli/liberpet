@@ -244,3 +244,45 @@ suspend fun HaBackend.hlsUrl(cameraId: String): String {
     val path = r?.s("url") ?: throw ApiException("Home Assistant gave no stream for $cameraId")
     return if ("://" in path) path else base + path
 }
+
+// ---------- Recordings (the recorder's folder, shared to Home Assistant as network media storage) ----------
+
+/** Home Assistant media folder holding the recorder's clips (network storage named "liberpet", usage Media). */
+const val RECORDINGS = "liberpet"
+
+/** One recorded clip: [day] "YYYY-MM-DD", [time] "HH:mm:ss"; [video] is its media id, [thumb] its picture's path in Home Assistant. */
+data class Clip(val day: String, val time: String, val reasons: List<String>, val seconds: Int?, val video: String, val thumb: String?)
+
+private val CLIP_NAME = Regex("""^(\d{2})-(\d{2})-(\d{2})_([a-z-]+?)(?:_(\d+)s)?\.mp4$""")
+
+/** A day folder's browse children → its clips, newest first. Names: HH-MM-SS_reason[-reason][_NNs].mp4 (+ .jpg). */
+fun parseClips(folder: String, day: String, children: JsonArray): List<Clip> {
+    val names = children.mapNotNull { it.jsonObject.s("title") }.toSet()
+    return children.mapNotNull { c ->
+        val title = c.jsonObject.s("title") ?: return@mapNotNull null
+        val m = CLIP_NAME.find(title) ?: return@mapNotNull null
+        val (h, mi, sec, reasons, dur) = m.destructured
+        val jpg = title.removeSuffix(".mp4") + ".jpg"
+        Clip(day, "$h:$mi:$sec", reasons.split('-'), dur.toIntOrNull(), c.jsonObject.s("media_content_id") ?: return@mapNotNull null,
+            if (jpg in names) "/media/local/$folder/$day/$jpg" else null)
+    }.sortedByDescending { it.time }
+}
+
+private fun mediaId(path: String) = "media-source://media_source/local/$path"
+
+private suspend fun HaBackend.browse(path: String): JsonArray =
+    ((ws(listOf(buildJsonObject { put("type", "media_source/browse_media"); put("media_content_id", mediaId(path)) })).first() as JsonObject)
+        .a("children") ?: JsonArray(emptyList()))
+
+/** Days with recordings ("YYYY-MM-DD"), newest first. Throws if Home Assistant has no such media folder. */
+suspend fun HaBackend.recordingDays(folder: String = RECORDINGS): List<String> =
+    browse(folder).mapNotNull { it.jsonObject.s("title")?.takeIf { t -> t.matches(Regex("""\d{4}-\d{2}-\d{2}""")) } }.sortedDescending()
+
+suspend fun HaBackend.clips(day: String, folder: String = RECORDINGS): List<Clip> = parseClips(folder, day, browse("$folder/$day"))
+
+/** A playable address for a media id (signed by Home Assistant, valid for a day). */
+suspend fun HaBackend.resolveMedia(id: String): String {
+    val r = ws(listOf(buildJsonObject { put("type", "media_source/resolve_media"); put("media_content_id", id) })).first() as? JsonObject
+    val path = r?.s("url") ?: throw ApiException("Home Assistant couldn't open that recording")
+    return if ("://" in path) path else base + path
+}

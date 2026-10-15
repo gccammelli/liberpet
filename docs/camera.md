@@ -104,6 +104,26 @@ Then give the new camera **the same area as the feeder**, so LiberPet links them
 If Home Assistant runs in a virtual machine on the same computer as go2rtc, use the address the VM uses to reach
 that computer, and let go2rtc's RTSP listen only there. The web page (`api`) can stay on `127.0.0.1`.
 
+## 6. Recordings (optional)
+
+LiberPet's gallery plays clips that its recorder saves outside Home Assistant:
+
+```
+go2rtc ──▶ recorder ──▶ folder (capped, e.g. 128 GB) ──NFS, read-only──▶ Home Assistant media ──▶ LiberPet gallery
+```
+
+- **Clips by event (default):** motion, plus feedings from the integration's *Recent Activity* sensor, each starting
+  10 seconds before the trigger. Continuous recording is an option.
+- **Size cap:** the oldest clips are deleted when the folder passes it.
+- **Outside Home Assistant:** the folder lives on the recorder's machine or a NAS. Home Assistant only reads it, as
+  network media storage named `liberpet`.
+- **In LiberPet:** the feeder's camera card → the playback or gallery icon opens a day-by-day gallery. It shows a
+  timeline of the day with feedings marked, then thumbnails with why each clip was recorded, and plays clips with a
+  scrubber.
+
+Setup and every option: [tools/recorder/README.md](../tools/recorder/README.md). With the recorder running, live
+view also starts at once, because the camera session stays open.
+
 ## Limitations
 
 - **It's a beta,** validated only on firmware 3.1.54. Other firmware or models may not work.
@@ -130,5 +150,3 @@ that computer, and let go2rtc's RTSP listen only there. The web page (`api`) can
 - **No extra setup for anyone:** if the `petlibro://` source is merged into the main go2rtc project, Home
   Assistant's built-in go2rtc would support the feeder directly. The PETLIBRO integration could then create
   the camera entity itself from the UID it already has. Worth suggesting to both projects.
-- **Local recordings:** record the stream into a folder outside Home Assistant, shared to it as network media
-  storage, with a gallery in LiberPet.

@@ -167,7 +167,11 @@ fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().backgrou
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf(Icons.Outlined.Videocam, Icons.Outlined.CameraAlt, Icons.Outlined.Mic, Icons.Outlined.PlayCircle, Icons.Outlined.Image).forEach { SmallIcon(it, C.Track, 30.dp) }
+        listOf(Icons.Outlined.Videocam, Icons.Outlined.CameraAlt, Icons.Outlined.Mic).forEach { SmallIcon(it, C.Track, 30.dp) }
+        // Playback and gallery: the recorder's clips through Home Assistant.
+        listOf(Icons.Outlined.PlayCircle to "Recordings", Icons.Outlined.Image to "Gallery").forEach { (icon, label) ->
+            Icon(icon, label, Modifier.size(30.dp).clickable { Nav.go(Screen.Gallery(d.serial)) }, tint = C.Text)
+        }
     }
 }
 
@@ -188,7 +192,7 @@ fun LiveStream(cam: io.github.gccammelli.liberpet.Camera, muted: Boolean, modifi
                 T("The camera didn't answer", 14.sp, Color.White); T("Tap to try again", 12.sp, Color(0xFF9A9A9A))
             }
             u == null -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
-            else -> VideoPlayer(u, muted, Modifier.fillMaxSize()) { error = it }
+            else -> VideoPlayer(u, muted, Modifier.fillMaxSize(), onError = { error = it })
         }
     }
 }

@@ -76,23 +76,29 @@ fun FeederArt(modifier: Modifier) = Canvas(modifier) {
     drawCircle(Color(0xFF3A3A3A), w * .025f, Offset(w * .5f, h * .6f))
 }
 
-/** Pet photo through Home Assistant's image proxy ([path] from [io.github.gccammelli.liberpet.Pet.avatar]), cached for the session; initial on grey while loading. */
+/** A picture from Home Assistant ([path] with the token), cached for the session; null while loading or if it fails. */
 @Composable
-fun PetAvatar(path: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
-    var img by remember(path) { mutableStateOf(path?.let { avatarCache[it] }) }
+fun rememberHaImage(path: String?, maxSide: Int): ImageBitmap? {
+    var img by remember(path) { mutableStateOf(path?.let { imageCache[it] }) }
     LaunchedEffect(path) {
         val ha = Repo.ha
         if (path != null && img == null && ha != null)
-            img = runCatching { decodeImage(ha.bytes(path), 256) }.getOrNull()?.also { avatarCache[path] = it }
+            img = runCatching { decodeImage(ha.bytes(path), maxSide) }.getOrNull()?.also { imageCache[path] = it }
     }
+    return img
+}
+
+/** Pet photo through Home Assistant's image proxy ([path] from [io.github.gccammelli.liberpet.Pet.avatar]); initial on grey while loading. */
+@Composable
+fun PetAvatar(path: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
+    val img = rememberHaImage(path, 256)
     Box(modifier.size(size).clip(CircleShape).background(Color(0xFFE6E6E6)), contentAlignment = Alignment.Center) {
-        val i = img
-        if (i != null) Image(i, name, Modifier.size(size), contentScale = ContentScale.Crop)
+        if (img != null) Image(img, name, Modifier.size(size), contentScale = ContentScale.Crop)
         else T(name.take(1), (size.value * .4f).sp, C.Sub)
     }
 }
 
-private val avatarCache = mutableStateMapOf<String, ImageBitmap>()
+private val imageCache = mutableStateMapOf<String, ImageBitmap>()
 
 
 /** The default Home header: a grey cat by a bowl of kibble in a warm room (a darker room in dark mode). */

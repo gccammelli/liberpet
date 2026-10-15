@@ -32,6 +32,7 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 - **Home:** every feeder and fountain, with problems flagged (filter or cleaning overdue, low water, offline).
 - **Feeder:**
   - live camera, muted by default, with full screen
+  - recordings gallery (optional; clips by motion or feeding, from a capped folder outside Home Assistant)
   - Feed Now
   - today's amount, feeding count and schedule, with today-only skips
   - schedule list, plus adding, editing, deleting and switching plans on or off
@@ -61,8 +62,8 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 ## Setup
 
 1. **In Home Assistant:** install the PETLIBRO integration, and give each device an area (its room in LiberPet).
-2. **Optional, live camera:** follow [docs/camera.md](docs/camera.md). LiberPet uses the camera in the
-   feeder's area, or the one picked in the feeder's Settings → Live Camera.
+2. **Optional, live camera and recordings:** follow [docs/camera.md](docs/camera.md). LiberPet uses the camera in
+   the feeder's area, or the one picked in the feeder's Settings → Live Camera.
 3. **In LiberPet:** enter your Home Assistant address and a long-lived access token (your Home Assistant
    profile → Security). The token is stored encrypted with the Android Keystore.
 

@@ -116,4 +116,20 @@ class HaTest {
         assertEquals(listOf(Camera("camera.feeder_cam", "Feeder cam", "Kitchen")), h.cameras) // area from its device; disabled ones skipped
         assertEquals("/api/image_proxy/image.mochi_avatar?v=2026-10-15T00:00:00+00:00", h.pets.single().avatar) // never the cloud URL
     }
+
+    @Test
+    fun clipsFromTheRecordingsFolder() {
+        // Shaped like Home Assistant's media_source/browse_media children for a day folder.
+        fun child(t: String) = """{"title":"$t","media_content_id":"media-source://media_source/local/liberpet/2026-10-15/$t"}"""
+        val children = arr("[" + listOf("08-39-32_manual.mp4", "08-39-32_manual.jpg", "21-15-03_feed-motion_42s.mp4", "21-15-03_feed-motion_42s.jpg",
+            "09-00-00_motion_7s.mp4", "notes.txt", "status.json").joinToString(",") { child(it) } + "]")
+        val clips = parseClips("liberpet", "2026-10-15", children)
+        assertEquals(listOf("21:15:03", "09:00:00", "08:39:32"), clips.map { it.time }) // newest first, other files ignored
+        assertEquals(listOf("feed", "motion"), clips[0].reasons)
+        assertEquals(42, clips[0].seconds)
+        assertEquals("/media/local/liberpet/2026-10-15/21-15-03_feed-motion_42s.jpg", clips[0].thumb)
+        assertEquals(null, clips[1].thumb) // no picture saved for it
+        assertEquals(null, clips[2].seconds) // older clips have no length in the name
+        assertEquals("media-source://media_source/local/liberpet/2026-10-15/08-39-32_manual.mp4", clips[2].video)
+    }
 }

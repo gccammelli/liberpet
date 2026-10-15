@@ -41,6 +41,6 @@ val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No platform pr
 /** Decodes an image, downscaled so its longest side is at most [maxSide] pixels. */
 expect fun decodeImage(bytes: ByteArray, maxSide: Int): ImageBitmap?
 
-/** Plays an HLS or MP4 address (from Home Assistant). [onError] gets a short message if playback fails. */
+/** Plays an HLS or MP4 address (from Home Assistant). [onError] gets a short message if playback fails; [controls] adds play/pause and a scrubber (recordings). */
 @androidx.compose.runtime.Composable
-expect fun VideoPlayer(url: String, muted: Boolean, modifier: androidx.compose.ui.Modifier, onError: (String) -> Unit)
+expect fun VideoPlayer(url: String, muted: Boolean, modifier: androidx.compose.ui.Modifier, onError: (String) -> Unit, controls: Boolean = false)
