@@ -104,4 +104,16 @@ class HaTest {
         ), log.map { it.text })
         assertEquals(Instant.parse("2026-10-15T05:30:39Z"), log[0].at)
     }
+
+    @Test
+    fun camerasAndPhotosComeFromHomeAssistant() {
+        val devs2 = arr(devs.toString().dropLast(1) + """,{"id":"g1","name":"go2rtc","model":"Generic","identifiers":[["generic","x"]],"area_id":"kitchen"}]""")
+        val ents2 = arr(ents.toString().dropLast(1) + """,{"entity_id":"camera.feeder_cam","unique_id":"x","device_id":"g1","platform":"generic","disabled_by":null},
+            {"entity_id":"camera.off","unique_id":"y","device_id":null,"platform":"generic","disabled_by":"user"},
+            {"entity_id":"image.mochi_avatar","unique_id":"petlibro-avatar-42","device_id":"p1","platform":"petlibro","disabled_by":null}]""")
+        val states2 = states + mapOf(e("camera.feeder_cam", "idle", """{"friendly_name":"Feeder cam"}"""), e("image.mochi_avatar", "2026-10-15T00:00:00+00:00", """{"url":"https://example.invalid/a.jpg"}"""))
+        val h = homeFrom(devs2, ents2, areas, states2)
+        assertEquals(listOf(Camera("camera.feeder_cam", "Feeder cam", "Kitchen")), h.cameras) // area from its device; disabled ones skipped
+        assertEquals("/api/image_proxy/image.mochi_avatar?v=2026-10-15T00:00:00+00:00", h.pets.single().avatar) // never the cloud URL
+    }
 }

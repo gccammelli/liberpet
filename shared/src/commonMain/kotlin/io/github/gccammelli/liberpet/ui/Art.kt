@@ -32,9 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.gccammelli.liberpet.Device
 import io.github.gccammelli.liberpet.decodeImage
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.readRawBytes
+import io.github.gccammelli.liberpet.Repo
 
 /*
  * Simple drawings of the devices, in the spirit of Petlibro's product photos (which are theirs, so not used here).
@@ -78,12 +76,14 @@ fun FeederArt(modifier: Modifier) = Canvas(modifier) {
     drawCircle(Color(0xFF3A3A3A), w * .025f, Offset(w * .5f, h * .6f))
 }
 
-/** Pet photo from its avatar URL (Petlibro's image host), cached for the session; initial on grey while loading. */
+/** Pet photo through Home Assistant's image proxy ([path] from [io.github.gccammelli.liberpet.Pet.avatar]), cached for the session; initial on grey while loading. */
 @Composable
-fun PetAvatar(url: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
-    var img by remember(url) { mutableStateOf(url?.let { avatarCache[it] }) }
-    LaunchedEffect(url) {
-        if (url != null && img == null) img = runCatching { decodeImage(http.get(url).readRawBytes(), 256) }.getOrNull()?.also { avatarCache[url] = it }
+fun PetAvatar(path: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
+    var img by remember(path) { mutableStateOf(path?.let { avatarCache[it] }) }
+    LaunchedEffect(path) {
+        val ha = Repo.ha
+        if (path != null && img == null && ha != null)
+            img = runCatching { decodeImage(ha.bytes(path), 256) }.getOrNull()?.also { avatarCache[path] = it }
     }
     Box(modifier.size(size).clip(CircleShape).background(Color(0xFFE6E6E6)), contentAlignment = Alignment.Center) {
         val i = img
@@ -93,7 +93,6 @@ fun PetAvatar(url: String?, name: String, size: Dp, modifier: Modifier = Modifie
 }
 
 private val avatarCache = mutableStateMapOf<String, ImageBitmap>()
-private val http by lazy { HttpClient() }
 
 
 /** The default Home header: a grey cat by a bowl of kibble in a warm room (a darker room in dark mode). */

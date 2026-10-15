@@ -80,6 +80,19 @@ object Repo {
         header.value = bytes
     }
 
+    /** The Home Assistant camera that shows [d]: the user's choice, else the one in the feeder's area, else none. */
+    fun cameraFor(d: Device, home: Home): Camera? {
+        when (val saved = store.settings.getString("camera.${d.serial}")) {
+            null -> {}
+            "" -> return null // the user chose "None"
+            else -> home.cameras.firstOrNull { it.id == saved }?.let { return it }
+        }
+        return home.cameras.filter { d.room != null && it.area == d.room }.singleOrNull()
+    }
+
+    /** null: automatic; "": none; else a camera entity id. */
+    fun setCamera(d: Device, id: String?) = store.settings.putString("camera.${d.serial}", id)
+
     fun setTheme(mode: String) { io.github.gccammelli.liberpet.ui.ThemeMode.mode = mode; store.settings.putString("theme", mode) }
 
     fun saveOrder(serials: List<String>) = store.settings.putString("device_order", serials.joinToString(","))

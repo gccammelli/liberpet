@@ -18,8 +18,9 @@ feeder camera ──(local network, UDP)──▶ go2rtc with PETLIBRO support �
   adds a `petlibro://` source that talks to the feeder directly on the local network and outputs a standard
   RTSP/WebRTC stream. It needs no firmware change, no cloud, and no DNS or MQTT changes.
 - **Home Assistant** shows that stream as an ordinary camera entity.
-- **LiberPet** plays the camera through Home Assistant, so it keeps a single connection and works wherever
-  Home Assistant works. The LiberPet player for this is planned but not built yet.
+- **LiberPet** plays the camera through Home Assistant's own stream (HLS), so it keeps a single connection and
+  works wherever Home Assistant works. It uses the camera in the feeder's area, or the one picked in the feeder's
+  Settings → Live Camera.
 
 ## What you need
 
@@ -96,8 +97,12 @@ Settings → Devices & services → Add integration → **Generic Camera**:
 
 - **Stream source:** `rtsp://GO2RTC_HOST:8554/petlibro?video=h264&audio=aac`
 - **Still image:** leave it empty. Home Assistant then takes stills from the stream.
+- **Advanced → RTSP transport:** TCP.
 
-Give the camera the same area as the feeder, so it's easy to match up.
+Then give the new camera **the same area as the feeder**, so LiberPet links them automatically.
+
+If Home Assistant runs in a virtual machine on the same computer as go2rtc, use the address the VM uses to reach
+that computer, and let go2rtc's RTSP listen only there. The web page (`api`) can stay on `127.0.0.1`.
 
 ## Limitations
 
@@ -106,6 +111,9 @@ Give the camera the same area as the feeder, so it's easy to match up.
 - **Codec changes:** changing the RTSP codec selection while streaming can stall the session. Choose the codecs
   in the URL up front.
 - **No two-way audio** (Meal Call or talk).
+- **Slow restarts:** after a viewing session ends, the camera can take up to about a minute before it accepts a
+  new one. go2rtc and Home Assistant retry on their own, so the next view just starts more slowly.
+- **No SD-card playback:** that uses another channel of the camera's protocol, which no open tool implements yet.
 - **Local network only:** go2rtc must reach the feeder directly.
 
 ## Not used, and why
@@ -122,4 +130,5 @@ Give the camera the same area as the feeder, so it's easy to match up.
 - **No extra setup for anyone:** if the `petlibro://` source is merged into the main go2rtc project, Home
   Assistant's built-in go2rtc would support the feeder directly. The PETLIBRO integration could then create
   the camera entity itself from the UID it already has. Worth suggesting to both projects.
-- **LiberPet:** play the Home Assistant camera in the feeder screen's camera card.
+- **Local recordings:** record the stream into a folder outside Home Assistant, shared to it as network media
+  storage, with a gallery in LiberPet.

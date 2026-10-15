@@ -27,6 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.text.style.TextAlign
+import io.github.gccammelli.liberpet.VideoPlayer
+import io.github.gccammelli.liberpet.hlsUrl
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -99,7 +108,7 @@ fun FeederScreen(d: Device, st: UiState) {
     }) {
         RoomLine(d)
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            CameraCard()
+            CameraCard(d, st)
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Gap(16.dp)
                 PetsLinked(d, st)
@@ -139,14 +148,65 @@ fun RoomLine(d: Device) = Row(Modifier.fillMaxWidth().background(C.Card).padding
     StatusIcons(d)
 }
 
-/** The camera stream uses Petlibro's proprietary P2P service, which Home Assistant can't relay. */
+/** The live view, played through Home Assistant's camera stream (see docs/camera.md for the local setup behind it). */
 @Composable
-fun CameraCard() = Column(Modifier.fillMaxWidth().background(C.Card).padding(top = 8.dp)) {
+fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().background(C.Card).padding(top = 8.dp)) {
+    val cam = st.home?.let { Repo.cameraFor(d, it) }
+    var muted by remember { mutableStateOf(true) }
     Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().aspectRatio(16 / 9f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
-        T("Live view isn't available through Home Assistant", 13.sp, Color(0xFF9A9A9A))
+        if (cam == null) T("Add the feeder's camera to Home Assistant to watch it here", 13.sp, Color(0xFF9A9A9A), align = TextAlign.Center, modifier = Modifier.padding(24.dp))
+        else {
+            LiveStream(cam, muted, Modifier.matchParentSize())
+            Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp, if (muted) "Unmute" else "Mute",
+                    Modifier.size(30.dp).clickable { muted = !muted }, tint = Color.White)
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Outlined.Fullscreen, "Full screen", Modifier.size(30.dp).clickable { Nav.go(Screen.CameraFull(d.serial)) }, tint = Color.White)
+            }
+            T("LIVE", 11.sp, Color.White, FontWeight.Bold, Modifier.align(Alignment.TopStart).padding(10.dp).clip(RoundedCornerShape(3.dp)).background(C.Red).padding(horizontal = 5.dp, vertical = 1.dp))
+        }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         listOf(Icons.Outlined.Videocam, Icons.Outlined.CameraAlt, Icons.Outlined.Mic, Icons.Outlined.PlayCircle, Icons.Outlined.Image).forEach { SmallIcon(it, C.Track, 30.dp) }
+    }
+}
+
+/** Asks Home Assistant for a fresh stream address, plays it, and offers a retry if the camera doesn't answer. */
+@Composable
+fun LiveStream(cam: io.github.gccammelli.liberpet.Camera, muted: Boolean, modifier: Modifier) {
+    var attempt by remember { mutableStateOf(0) }
+    var url by remember(cam.id, attempt) { mutableStateOf<String?>(null) }
+    var error by remember(cam.id, attempt) { mutableStateOf<String?>(null) }
+    LaunchedEffect(cam.id, attempt) {
+        val ha = Repo.ha ?: return@LaunchedEffect
+        runCatching { ha.hlsUrl(cam.id) }.onSuccess { url = it }.onFailure { error = it.message ?: "No stream" }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val u = url
+        when {
+            error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { attempt++ }) {
+                T("The camera didn't answer", 14.sp, Color.White); T("Tap to try again", 12.sp, Color(0xFF9A9A9A))
+            }
+            u == null -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
+            else -> VideoPlayer(u, muted, Modifier.fillMaxSize()) { error = it }
+        }
+    }
+}
+
+@Composable
+fun CameraFullScreen(d: Device, st: UiState) {
+    val cam = st.home?.let { Repo.cameraFor(d, it) } ?: return Nav.back().let {}
+    var muted by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        LiveStream(cam, muted, Modifier.fillMaxSize())
+        Row(Modifier.statusBarsPadding().padding(8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp).clickable { Nav.back() }, contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+            }
+            T(d.name, 16.sp, Color.White, modifier = Modifier.weight(1f))
+            Icon(if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp, null, Modifier.size(30.dp).clickable { muted = !muted }, tint = Color.White)
+            Spacer(Modifier.width(8.dp))
+        }
     }
 }
 
@@ -544,6 +604,9 @@ fun FeederSettingsScreen(d: Device) {
             Gap(12.dp)
             NavRow("Desiccant Bag", d.num("remaining_desiccant")?.let { if (it <= 0) "${(-it).toInt()} day(s) overdue" else "${it.toInt()} day(s) left" }) { sheet = "desiccant" }
             Gap(12.dp)
+            val home = Repo.state.value.home
+            NavRow("Live Camera", home?.let { Repo.cameraFor(d, it)?.name } ?: "None") { sheet = "livecam" }
+            Gap(12.dp)
             NavRow("Camera Settings", d.state("resolution")?.takeIf { it != "unknown" }) { sheet = "camera" }
             Gap(12.dp)
             NavRow("Firmware Settings", d.firmware?.let { "V$it" }) { sheet = "firmware" }
@@ -561,6 +624,14 @@ fun FeederSettingsScreen(d: Device) {
             T("Camera settings are read-only through Home Assistant.", 13.sp, C.Faint); Gap(20.dp)
         }
         "firmware" -> FirmwareSheet(d) { sheet = null }
+        "livecam" -> Sheet({ sheet = null }, "LIVE CAMERA", confirm = null) {
+            val cams = Repo.state.value.home?.cameras.orEmpty()
+            Radio(false, "Automatic (the camera in the feeder's area)") { Repo.setCamera(d, null); Repo.refresh(); sheet = null }
+            cams.forEach { c -> Radio(false, c.name + (c.area?.let { " · $it" } ?: "")) { Repo.setCamera(d, c.id); Repo.refresh(); sheet = null } }
+            Radio(false, "None") { Repo.setCamera(d, ""); Repo.refresh(); sheet = null }
+            if (cams.isEmpty()) T("No cameras in Home Assistant yet. See LiberPet's docs/camera.md.", 13.sp, C.Faint, modifier = Modifier.padding(vertical = 8.dp))
+            Gap(20.dp)
+        }
     }
 }
 

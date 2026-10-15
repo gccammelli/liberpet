@@ -10,6 +10,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.websocket.Frame
@@ -48,6 +49,8 @@ interface HaBackend {
     val base: String
     suspend fun get(path: String): String
     suspend fun post(path: String, body: String): String
+    /** Raw bytes (pictures through Home Assistant's image proxy). */
+    suspend fun bytes(path: String): ByteArray
     /** Websocket commands in one session. Returns each result. */
     suspend fun ws(commands: List<JsonObject>): List<JsonElement?>
 }
@@ -83,6 +86,12 @@ class HaHttp(url: String, private val token: String) : HaBackend {
         header("Authorization", "Bearer $token"); contentType(ContentType.Application.Json); setBody(body)
     })
 
+    override suspend fun bytes(path: String): ByteArray {
+        val r = http.get(base + path) { header("Authorization", "Bearer $token") }
+        if (r.status.value !in 200..299) { check(r) }
+        return r.readRawBytes()
+    }
+
     private suspend fun check(r: HttpResponse): String {
         val text = r.bodyAsText()
         when (r.status.value) {
@@ -113,7 +122,8 @@ data class Device(val haId: String, val serial: String, val name: String, val mo
 
 data class Pet(val haId: String, val id: String, val name: String, val e: Map<String, Entity>) {
     fun num(k: String) = e[k]?.num
-    val avatar get() = e["avatar"]?.attrs?.s("url")
+    /** The pet's photo through Home Assistant's image proxy (the integration's image entity), never Petlibro's server. */
+    val avatar get() = e["avatar"]?.let { "/api/image_proxy/${it.id}?v=${it.state}" }
     val breed get() = e["breedName"]?.state?.takeIf { it.isNotBlank() && it != "unknown" }
     val sex get() = e["gender"]?.state
     val birthday get() = e["birthday"]?.state?.takeIf { it.length == 10 }
@@ -126,7 +136,10 @@ data class Pet(val haId: String, val id: String, val name: String, val e: Map<St
 /** A feeding plan. [time] is "HH:mm" in the phone's time zone; [days] are 1 = Monday … 7 = Sunday. */
 data class Plan(val id: Long, val time: String, val grams: Double, val portions: Int, val enabled: Boolean, val days: List<Int>, val label: String, val todayState: String?)
 
-data class Home(val devices: List<Device>, val pets: List<Pet>, val owner: String?)
+/** A Home Assistant camera entity; [area] is its area's name (its own, or its device's). */
+data class Camera(val id: String, val name: String, val area: String?)
+
+data class Home(val devices: List<Device>, val pets: List<Pet>, val owner: String?, val cameras: List<Camera> = emptyList())
 
 private val DEVICE_KEY = Regex("""^[^-]+-(.+?)(?:-[0-9A-F]{12})?$""")
 private val PET_KEY = Regex("""^petlibro-(.+)-(\d+)$""")
@@ -160,8 +173,14 @@ fun homeFrom(devs: JsonArray, ents: JsonArray, areas: JsonArray, states: Map<Str
             devices += Device(d.s("id")!!, serial, name, d.s("model") ?: "", areaName[d.s("area_id")], d.s("sw_version"), e, tz)
         }
     }
+    val deviceArea = devs.associate { it.jsonObject.s("id") to it.jsonObject.s("area_id") }
+    val cameras = ents.map { it.jsonObject }.filter { it.s("entity_id")?.startsWith("camera.") == true && it.s("disabled_by") == null }.mapNotNull { r ->
+        val id = r.s("entity_id")!!
+        val st = states[id] ?: return@mapNotNull null
+        Camera(id, st.attrs.s("friendly_name") ?: id, areaName[r.s("area_id") ?: deviceArea[r.s("device_id")]])
+    }
     val owner = states.values.firstOrNull { it.attrs.s("nickname") != null && it.id.startsWith("sensor.petlibro_") }?.attrs?.s("nickname")
-    return Home(devices, pets.sortedWith(compareBy({ it.e["pet"]?.attrs?.s("mainPet") != "true" }, { it.id.toLongOrNull() ?: 0 })), owner) // devices in Home Assistant's order (Petlibro's isn't exposed); main pet first, as Petlibro
+    return Home(devices, pets.sortedWith(compareBy({ it.e["pet"]?.attrs?.s("mainPet") != "true" }, { it.id.toLongOrNull() ?: 0 })), owner, cameras) // devices in Home Assistant's order (Petlibro's isn't exposed); main pet first, as Petlibro
 }
 
 // ---------- Feeder ----------
@@ -217,4 +236,11 @@ suspend fun HaBackend.petlibro(service: String, d: Device, data: JsonObject = Js
 fun planData(time: String, portions: Int, days: List<Int>, label: String) = buildJsonObject {
     put("time", "$time:00"); put("portions", portions); put("label", label)
     put("days", JsonArray(days.sorted().map { JsonPrimitive("$it") })); put("sound", false)
+}
+
+/** An HLS address for a camera, from Home Assistant's own streaming (valid while it's being watched). */
+suspend fun HaBackend.hlsUrl(cameraId: String): String {
+    val r = ws(listOf(buildJsonObject { put("type", "camera/stream"); put("entity_id", cameraId); put("format", "hls") })).first() as? JsonObject
+    val path = r?.s("url") ?: throw ApiException("Home Assistant gave no stream for $cameraId")
+    return if ("://" in path) path else base + path
 }

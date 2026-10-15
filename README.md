@@ -1,11 +1,29 @@
 # LiberPet
 
-An open-source app for PETLIBRO feeders and fountains that talks only to **your own Home Assistant**, never to Petlibro's cloud.
-Its screens follow the official Petlibro app's layout, so it feels familiar.
+An open-source app for PETLIBRO feeders and fountains. Its screens follow the official Petlibro app's layout,
+so it feels familiar.
 
-Home Assistant holds the Petlibro login through the community
-[PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) (install it from HACS).
-Petlibro allows one login per account, so the official app gets signed out once Home Assistant is logged in. LiberPet replaces it.
+## How it works
+
+LiberPet talks only to **your Home Assistant**. Home Assistant does the rest:
+
+```
+LiberPet ──▶ your Home Assistant ──▶ Petlibro's cloud ──▶ feeder / fountains   (status, logs, controls)
+                       │
+                       └──▶ go2rtc on your network ──▶ feeder camera            (live view, local only)
+```
+
+- **Device data and controls need Petlibro's cloud.** Home Assistant reaches it through the community
+  [PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) (install it from HACS). The devices stay
+  connected to Petlibro's cloud, and every status update, log and command goes through it. If the cloud or your
+  internet is down, Home Assistant can't read or control the devices. Scheduled meals still dispense, because
+  the schedule is stored on the feeder.
+- **The camera is local.** Its video goes straight from the feeder to go2rtc on your network, then to Home
+  Assistant, and never through Petlibro's servers. Setup: [docs/camera.md](docs/camera.md).
+- **Pet photos** come through Home Assistant too, from the integration's image entities.
+
+Petlibro allows one login per account. Give Home Assistant a second Petlibro account and share your devices
+with it, so the official app can stay signed in on your main account.
 
 ## What works
 
@@ -13,8 +31,9 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 
 - **Home:** every feeder and fountain, with problems flagged (filter or cleaning overdue, low water, offline).
 - **Feeder:**
+  - live camera, muted by default, with full screen
   - Feed Now
-  - today's amount, feeding count and schedule
+  - today's amount, feeding count and schedule, with today-only skips
   - schedule list, plus adding, editing, deleting and switching plans on or off
   - desiccant status and reset
   - indicator light
@@ -32,10 +51,20 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 
 ## What doesn't
 
-- **Camera live view, recordings, Meal Call and video cloud:** the PETLIBRO integration provides no video. Live view works locally through a go2rtc build with PETLIBRO support; see [docs/camera.md](docs/camera.md). Recordings, Meal Call and the video cloud aren't available.
-- **Logs:** with the integration's **Recent Activity** sensor (a small addition, proposed upstream), logs come from Petlibro's own records, with exact times and the same wording as the official app. Without it, LiberPet builds logs from Home Assistant's recorder: they start when Home Assistant starts recording, times can lag by up to a few minutes, and two drinks within the same minute show as one.
-- **Rooms:** these are Home Assistant areas. Assign each device an area there.
-- **Per-pet food and water:** Care shows the totals of each pet's linked devices. Petlibro only splits them per pet with RFID models.
+- **Meal Call, two-way audio, Petlibro's video cloud and SD-card playback:** no open implementation exists
+  yet. Use the official app for these.
+- **Exact logs** need the integration's **Recent Activity** sensor, a small addition proposed upstream. Without
+  it, LiberPet builds logs from Home Assistant's history, so times can lag by up to a few minutes.
+- **Per-pet food and water:** Care shows the totals of each pet's linked devices. Petlibro only splits them per
+  pet with RFID models.
+
+## Setup
+
+1. **In Home Assistant:** install the PETLIBRO integration, and give each device an area (its room in LiberPet).
+2. **Optional, live camera:** follow [docs/camera.md](docs/camera.md). LiberPet uses the camera in the
+   feeder's area, or the one picked in the feeder's Settings → Live Camera.
+3. **In LiberPet:** enter your Home Assistant address and a long-lived access token (your Home Assistant
+   profile → Security). The token is stored encrypted with the Android Keystore.
 
 ## Extras
 
@@ -43,14 +72,11 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 - **Home picture:** tap the picture button on Home to use your own photo. It stays on the phone.
 - **Appearance:** Me → Appearance switches between System, Light and Dark.
 
-## Connecting
-
-Enter your Home Assistant address and a long-lived access token (your profile → Security). The token is stored encrypted with the Android Keystore.
-
 ## Building
 
 ```
 ./gradlew :app:assembleDebug
 ```
 
-LiberPet is not affiliated with PETLIBRO. PETLIBRO is a trademark of its owner. The device pictures are simple drawings, not Petlibro's photos.
+LiberPet is not affiliated with PETLIBRO. PETLIBRO is a trademark of its owner. The device pictures are simple
+drawings, not Petlibro's photos.
