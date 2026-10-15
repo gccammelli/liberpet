@@ -1,0 +1,93 @@
+# Builds the Android APK and an unsigned iOS .ipa. Runs only by hand (Actions → Build → Run workflow) or on a "v*"
+# tag, which also attaches both to a GitHub Release: macOS minutes are expensive on a private repository.
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        run: ./gradlew testDebugUnitTest
+
+      # Debug-signed, so it installs without a release key.
+      - name: Build APK
+        run: |
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk liberpet.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: liberpet.apk
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: liberpet.apk
+          generate_release_notes: true
+
+  # Unsigned .ipa: sign it with your own Apple ID via SideStore or AltStore. Plus one simulator screenshot of the
+  # first screen, to check the app starts.
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Shared tests on the iOS simulator
+        run: ./gradlew :shared:iosSimulatorArm64Test
+
+      - name: Build unsigned .ipa
+        run: |
+          xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build/ios" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          mkdir -p Payload && cp -R build/ios/Release-iphoneos/LiberPet.app Payload/
+          zip -qry liberpet.ipa Payload
+
+      - name: Simulator screenshot of the first screen
+        run: |
+          xcodebuild -project iosApp/iosApp.xcodeproj -target iosApp -configuration Debug -sdk iphonesimulator -arch arm64 \
+            SYMROOT="$PWD/build/ios-sim" CODE_SIGNING_ALLOWED=NO build
+          TYPE=$(xcrun simctl list devicetypes | grep -oE 'com.apple.CoreSimulator.SimDeviceType.iPhone-1[0-9](-Pro)?' | tail -1)
+          RUNTIME=$(xcrun simctl list runtimes | grep -oE 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]+' | tail -1)
+          DEV=$(xcrun simctl create liberpet "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$DEV" && xcrun simctl bootstatus "$DEV"
+          xcrun simctl install "$DEV" build/ios-sim/Debug-iphonesimulator/LiberPet.app
+          mkdir -p screenshots
+          xcrun simctl launch "$DEV" io.github.gccammelli.liberpet; sleep 25
+          xcrun simctl io "$DEV" screenshot screenshots/1-connect.png
+          xcrun simctl ui "$DEV" appearance dark; sleep 5
+          xcrun simctl io "$DEV" screenshot screenshots/2-connect-dark.png
+          xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "LiberPet"' --style compact | tail -100 > screenshots/app-log.txt || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios
+          path: |
+            liberpet.ipa
+            screenshots/
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: liberpet.ipa

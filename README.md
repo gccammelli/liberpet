@@ -73,6 +73,13 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 - **Home picture:** tap the picture button on Home to use your own photo. It stays on the phone.
 - **Appearance:** Me → Appearance switches between System, Light and Dark.
 
+## iPhone (beta)
+
+LiberPet builds for iPhone too, from the same code. The repository's **Build** workflow (run it by hand, or push a
+`v*` tag) produces an unsigned `liberpet.ipa`. Install it with [SideStore](https://sidestore.io) (or AltStore), which
+signs it with your own free Apple ID. It's checked in the iOS simulator; it hasn't been tried on a real iPhone yet.
+Live view and clips play with iOS's own video player.
+
 ## Building
 
 ```
