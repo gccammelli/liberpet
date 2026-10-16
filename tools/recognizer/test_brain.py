@@ -33,13 +33,13 @@ for c in range(30):  # cat A at the left bowl for 8 s; on odd clips cat B at the
 for t in range(16):
     add("day/swap", "left", t, "pet-a" if t < 8 else "pet-b")
 
-# A long stay (50 s) is cut into short pieces for labelling.
-for t in range(50):
+# A long stay (50 s) with a 6 s pause in the middle (same cat back): one question, not several.
+for t in list(range(0, 22)) + list(range(28, 50)):
     add("day/long", "right", t, "pet-b")
 
 segs = b.segments()
-long = sorted(g["t1"] - g["t0"] + 1 for g in segs.values() if g["clip"] == "day/long")
-assert long and max(long) <= 20 and sum(long) == 50, long
+long = [(g["t0"], g["t1"]) for g in segs.values() if g["clip"] == "day/long"]
+assert long == [(0, 49)], long
 swap = sorted((g["t0"], g["t1"]) for g in segs.values() if g["clip"] == "day/swap")
 print("swap clip segments:", swap)
 assert len(swap) == 2 and swap[0][1] < swap[1][0], swap  # split where the cat changed

@@ -121,12 +121,12 @@ class Brain:
             right += bool(votes) and max(votes, key=votes.get) == l
         return (right / len(segs) if segs else 0.0), counts
 
-    def segments(self, gap=3, split=0.86, min_len=3, max_len=20):
+    def segments(self, gap=3, split=0.86, min_len=3, same=0.95):
         """
-        Stretches with one cat at one bowl: {id: {clip, side, t0, t1, pids}}. A bowl's cat pictures split where it
-        stays empty for more than [gap] seconds or where the picture's fingerprint jumps (the 3 seconds before vs
-        the 3 after less similar than [split]): cats can swap bowls within a clip. Shorter than [min_len] s: dropped;
-        longer than [max_len] s: cut into pieces, so each labelling video stays short and watchable.
+        Stays of one cat at one bowl: {id: {clip, side, t0, t1, pids}}. A bowl's cat pictures split where it stays
+        empty for more than [gap] seconds or where the fingerprint jumps (the 3 seconds before vs the 3 after less
+        similar than [split]: cats can swap bowls mid-clip). Then neighbouring pieces that look like the same cat
+        (at least [same] alike: a pause, not a swap) join up again. Stays shorter than [min_len] s are dropped.
         """
         runs = {}
         for p in self.ids:
@@ -136,23 +136,28 @@ class Brain:
         out = {}
         for (clip, side), v in runs.items():
             v.sort()
-            cur = []
+            pieces, cur = [], []
             for i, (t, p) in enumerate(v):
-                if cur and (t - cur[-1][0] > gap or t - cur[0][0] >= max_len or self._jump(cur[-3:], v[i:i + 3], split)):
-                    self._close(out, clip, side, cur, min_len); cur = []
+                if cur and (t - cur[-1][0] > gap or self._jump(cur[-3:], v[i:i + 3], split)):
+                    pieces.append(cur); cur = []
                 cur.append((t, p))
-            self._close(out, clip, side, cur, min_len)
+            if cur:
+                pieces.append(cur)
+            joined = [pieces[0]]
+            for piece in pieces[1:]:
+                if self._jump(joined[-1], piece, same):
+                    joined.append(piece)
+                else:
+                    joined[-1] = joined[-1] + piece
+            for piece in joined:
+                if piece[-1][0] - piece[0][0] + 1 >= min_len:
+                    sid = f"{clip.replace('/', '_')}_{side[0]}{piece[0][0]:03d}"
+                    out[sid] = {"clip": clip, "side": side, "t0": piece[0][0], "t1": piece[-1][0], "pids": [p for _, p in piece]}
         return out
 
     def _jump(self, before, after, split):
         x = self.emb[[self.pos[p] for _, p in before]].mean(0); y = self.emb[[self.pos[p] for _, p in after]].mean(0)
         return float(x @ y / (np.linalg.norm(x) * np.linalg.norm(y))) < split
-
-    @staticmethod
-    def _close(out, clip, side, cur, min_len):
-        if cur and cur[-1][0] - cur[0][0] + 1 >= min_len:
-            sid = f"{clip.replace('/', '_')}_{side[0]}{cur[0][0]:03d}"
-            out[sid] = {"clip": clip, "side": side, "t0": cur[0][0], "t1": cur[-1][0], "pids": [p for _, p in cur]}
 
     def label_segment(self, seg_id, seg, pet):
         for p in seg["pids"]:
@@ -298,20 +303,22 @@ class Recognizer:
 
     def render(self, sid, seg):
         """
-        The labelling video in the shared folder: the segment (at most 10 s to watch, sped up if longer) with the
+        The labelling video in the shared folder: up to 10 s of the stay (around its middle, at normal speed) with the
         other bowl dimmed, plus a poster frame. Built under a temporary name, then renamed.
         """
         dst = self.learn / f"{sid}.mp4"
         if dst.exists():
             return
         mp4 = self.out / f"{seg['clip']}.mp4"
-        start, dur = max(seg["t0"] - 1, 0), seg["t1"] - seg["t0"] + 2  # at most 22 s: shown in 10 s or less
+        mid = sorted(self.brain.meta[p]["t"] for p in seg["pids"])[len(seg["pids"]) // 2]
+        start = max(seg["t0"], min(mid - 5, seg["t1"] - 9)) if seg["t1"] - seg["t0"] > 10 else max(seg["t0"] - 1, 0)
+        dur = 10 if seg["t1"] - seg["t0"] > 10 else seg["t1"] - seg["t0"] + 2  # 10 s of the stay, at normal speed
         a, b = self.cfg["split"]
         dim = f"drawbox=x=iw*{a}:y=0:w=iw*{1 - a}:h=ih:color=black@0.65:t=fill" if seg["side"] == "left" \
             else f"drawbox=x=0:y=0:w=iw*{b}:h=ih:color=black@0.65:t=fill"
         part = self.learn / f".{sid}.part.mp4"
         subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-ss", str(start), "-t", str(dur), "-i", str(mp4),
-                        "-vf", f"scale=640:-2,{dim},setpts={min(1.0, 10 / dur):.3f}*PTS", "-an", "-c:v", "libx264", "-preset", "veryfast",
+                        "-vf", f"scale=640:-2,{dim}", "-an", "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "28", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(part)], check=False)
         if part.exists() and part.stat().st_size:
             poster = self.learn / f".{sid}.part.jpg"
@@ -402,11 +409,11 @@ class Recognizer:
     def run(self):
         log("starting:", len(self.brain.ids), "pictures,", len(self.brain.labels), "labels")
         self.segs = self.brain.segments()
-        # Labels from before segments (single pictures): each now labels its whole segment.
+        # Earlier answers (single pictures, or shorter pieces) label the whole stay they fall in, if they agree.
         for sid, seg in self.segs.items():
-            single = {self.brain.labels[p] for p in seg["pids"] if p in self.brain.labels and "seg" not in self.brain.meta[p]}
-            if len(single) == 1:
-                self.brain.label_segment(sid, seg, single.pop())
+            given = {self.brain.labels[p] for p in seg["pids"] if p in self.brain.labels}
+            if len(given) == 1:
+                self.brain.label_segment(sid, seg, given.pop())
         last_scan = 0.0
         changed = True
         while True:
