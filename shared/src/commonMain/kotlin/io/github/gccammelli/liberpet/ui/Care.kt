@@ -68,7 +68,8 @@ fun CareTab(st: UiState) {
     val pet = pets.getOrNull(sel)
     // Cat Insights (GitHub #4): per-cat statistics from the recognizer, when it's running.
     var daily by remember { mutableStateOf<Map<String, Map<String, CatDay>>?>(null) }
-    LaunchedEffect(Unit) { daily = runCatching { Repo.ha?.catDays() }.getOrNull() }
+    var dailyLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { daily = runCatching { Repo.ha?.catDays() }.getOrNull(); dailyLoaded = true }
     Column(Modifier.fillMaxSize().background(C.Bg)) {
         Row(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding().height(64.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -106,6 +107,10 @@ fun CareTab(st: UiState) {
             val fountains = st.home?.devices.orEmpty().filter { it.isFountain && it.serial in pet.linkedSerials }
             val stats = daily.takeIf { io.github.gccammelli.liberpet.Feature.CAT_INSIGHTS.on() }
             if (stats != null && feeders.isNotEmpty()) { CatInsights(pet, stats); Gap(22.dp) }
+            else if (io.github.gccammelli.liberpet.Feature.CAT_INSIGHTS.on() && dailyLoaded && feeders.isNotEmpty()) {
+                SetupNote("Cat Insights is on, but there are no statistics yet: they come from Cat Recognition (LiberPet's recognizer).", "tools/recognizer/README.md")
+                Gap(22.dp)
+            }
             T("Overview", 18.sp, weight = FontWeight.Medium)
             Gap(12.dp)
             if (stats == null || feeders.isEmpty()) {

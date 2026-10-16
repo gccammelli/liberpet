@@ -72,8 +72,11 @@ private fun progress(c: Cats): String {
 @Composable
 fun CatsCard(d: Device) {
     var cats by remember { mutableStateOf<Cats?>(null) }
-    LaunchedEffect(d.serial) { cats = runCatching { Repo.ha?.cats() }.getOrNull() }
-    val c = cats ?: return
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(d.serial) { cats = runCatching { Repo.ha?.cats() }.getOrNull(); loaded = true }
+    val c = cats ?: return run {
+        if (loaded) { SetupNote("Cat Recognition is on, but LiberPet's recognizer isn't running yet. It needs the recorder too.", "tools/recognizer/README.md"); Gap(12.dp) }
+    }
     Card(padding = PaddingValues(horizontal = 24.dp, vertical = 18.dp), onClick = { Nav.go(Screen.Teach(d.serial)) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

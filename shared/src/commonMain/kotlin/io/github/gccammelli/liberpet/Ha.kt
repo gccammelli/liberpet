@@ -35,6 +35,9 @@ import kotlinx.serialization.json.put
  */
 
 const val INTEGRATION_URL = "https://github.com/jjjonesjr33/petlibro"
+const val REPO_URL = "https://github.com/gccammelli/liberpet"
+/** A setup guide in LiberPet's repository ("docs/camera.md"). */
+fun guide(path: String) = "$REPO_URL/blob/main/$path"
 
 class ApiException(message: String) : Exception(message)
 class AuthException(message: String) : Exception(message)

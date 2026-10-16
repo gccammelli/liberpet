@@ -247,3 +247,15 @@ fun Radio(selected: Boolean, label: String, enabled: Boolean = true, onClick: ()
         }
         T(label, 16.sp, if (selected && enabled) C.Text else C.Faint)
     }
+
+/** What an optional part needs before it works, with its setup guide (a path in LiberPet's repository). */
+@Composable
+fun SetupNote(text: String, guidePath: String, modifier: Modifier = Modifier) {
+    val p = io.github.gccammelli.liberpet.LocalPlatform.current
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, C.Line, RoundedCornerShape(12.dp))
+        .clickable { p.openUrl(io.github.gccammelli.liberpet.guide(guidePath)) }.padding(16.dp)) {
+        T(text, 14.sp, C.Sub, lh = 19.sp)
+        Gap(6.dp)
+        T("Setup guide ›", 14.sp, C.Blue, FontWeight.Medium)
+    }
+}
