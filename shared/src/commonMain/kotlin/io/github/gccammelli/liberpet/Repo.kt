@@ -38,6 +38,7 @@ object Repo {
         io.github.gccammelli.liberpet.ui.ThemeMode.mode = s.settings.getString("theme") ?: "system"
         betaRecognition.value = s.settings.getString("beta_recognition") == "true"
         betaInsights.value = s.settings.getString("beta_insights") == "true"
+        showCare.value = s.settings.getString("show_care") == "true"
         header.value = s.files.read(HEADER)
         val url = s.settings.getString("ha_url")
         val token = s.secrets.get("ha_token")
@@ -98,8 +99,10 @@ object Repo {
     /** Beta features (GitHub #5), off until switched on in Settings: the feeder's Cat Recognition card, and Cat Insights in Care. */
     val betaRecognition = MutableStateFlow(false)
     val betaInsights = MutableStateFlow(false)
+    /** The Care tab, hidden until switched on in Settings. */
+    val showCare = MutableStateFlow(false)
     fun setBeta(key: String, on: Boolean) {
-        (if (key == "beta_recognition") betaRecognition else betaInsights).value = on
+        mapOf("beta_recognition" to betaRecognition, "beta_insights" to betaInsights, "show_care" to showCare).getValue(key).value = on
         store.settings.putString(key, on.toString())
     }
 

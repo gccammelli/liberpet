@@ -160,22 +160,23 @@ private fun Device.plansById(id: Long?) = id?.let { i -> plans.firstOrNull { it.
 
 @Composable
 fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
-    Box(Modifier.weight(1f)) {
-        when (Nav.tab) {
-            0 -> HomeTab(st)
-            1 -> CareTab(st)
-            else -> MeTab(st)
-        }
-    }
+    // Care only when switched on in Settings; Nav.tab is a position in this list.
+    val care = Repo.showCare.collectAsState().value
+    val tabs = listOfNotNull(
+        Triple("Device", Icons.Default.Smartphone) @Composable { HomeTab(st) },
+        if (care) Triple("Care", Icons.Default.Pets) @Composable { CareTab(st) } else null,
+        Triple("Me", Icons.Default.Person) @Composable { MeTab(st) },
+    )
+    val current = Nav.tab.coerceIn(0, tabs.lastIndex)
+    Box(Modifier.weight(1f)) { tabs[current].third() }
     Row(Modifier.fillMaxWidth().background(C.Nav).navigationBarsPadding().height(64.dp)) {
-        listOf("Device" to Icons.Default.Smartphone, "Care" to Icons.Default.Pets, "Me" to Icons.Default.Person)
-            .forEachIndexed { i, (label, icon) ->
-                val sel = Nav.tab == i
-                Column(Modifier.weight(1f).fillMaxSize().clickable { Nav.tab = i }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(icon, label, Modifier.size(28.dp), tint = if (sel) C.Dark else C.Faint)
-                    T(label, 11.sp, if (sel) C.Dark else C.Sub, if (sel) FontWeight.Bold else FontWeight.Normal)
-                }
+        tabs.forEachIndexed { i, (label, icon) ->
+            val sel = current == i
+            Column(Modifier.weight(1f).fillMaxSize().clickable { Nav.tab = i }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(icon, label, Modifier.size(28.dp), tint = if (sel) C.Dark else C.Faint)
+                T(label, 11.sp, if (sel) C.Dark else C.Sub, if (sel) FontWeight.Bold else FontWeight.Normal)
             }
+        }
     }
 }
 

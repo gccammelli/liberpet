@@ -270,12 +270,16 @@ fun SettingsScreen() = BigTitlePage("Settings", { Nav.back() }) {
     Gap(12.dp)
     NavRow("Refresh", chevron = false) { Repo.refresh() }
     Gap(24.dp)
+    T("TABS", 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
+    Gap(8.dp)
+    ToggleRow("Care", Repo.showCare.collectAsState().value) { Repo.setBeta("show_care", it); Nav.tab = if (it) 2 else 1 } // stay on Me, whose position just moved
+    Gap(24.dp)
     T("BETA FEATURES", 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
     Gap(8.dp)
     ToggleRow("Cat Recognition", Repo.betaRecognition.collectAsState().value) { Repo.setBeta("beta_recognition", it) }
     ToggleRow("Cat Insights", Repo.betaInsights.collectAsState().value) { Repo.setBeta("beta_insights", it) }
     T("Need LiberPet's recorder and recognizer on your home server (see tools/recognizer). Cat Recognition teaches it your " +
-        "cats on the feeder page; Cat Insights shows each cat's visits in Care.", 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(16.dp))
+        "cats on the feeder page; Cat Insights shows each cat's visits in Care (switch the Care tab on too).", 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(16.dp))
     Gap(12.dp)
     NavRow("Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
 }
