@@ -272,21 +272,25 @@ fun MeTab(st: UiState) {
 
 @Composable
 fun SettingsScreen() = BigTitlePage("Settings", { Nav.back() }) {
-    Gap(12.dp)
-    NavRow("Refresh", chevron = false) { Repo.refresh() }
-    // Optional parts of LiberPet, from the registry (Feature); all off until switched on.
-    io.github.gccammelli.liberpet.Feature.entries.groupBy { it.group }.forEach { (group, features) ->
-        Gap(24.dp)
-        T(group.uppercase(), 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
-        Gap(8.dp)
-        features.forEach { f ->
-            ToggleRow(f.title, f.on()) { on ->
-                Repo.setFeature(f, on)
-                if (f == io.github.gccammelli.liberpet.Feature.CARE_TAB) Nav.tab = if (on) 2 else 1 // stay on Me, whose position just moved
+    // Scrolls: the optional-features list makes it taller than small screens.
+    Column(Modifier.verticalScroll(rememberScrollState())) {
+        Gap(12.dp)
+        NavRow("Refresh", chevron = false) { Repo.refresh() }
+        // Optional parts of LiberPet, from the registry (Feature); all off until switched on.
+        io.github.gccammelli.liberpet.Feature.entries.groupBy { it.group }.forEach { (group, features) ->
+            Gap(24.dp)
+            T(group.uppercase(), 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
+            Gap(8.dp)
+            features.forEach { f ->
+                ToggleRow(f.title, f.on()) { on ->
+                    Repo.setFeature(f, on)
+                    if (f == io.github.gccammelli.liberpet.Feature.CARE_TAB) Nav.tab = if (on) 2 else 1 // stay on Me, whose position just moved
+                }
+                T(f.about + (f.needs?.let { " Needs: $it." } ?: ""), 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             }
-            T(f.about + (f.needs?.let { " Needs: $it." } ?: ""), 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
         }
+        Gap(24.dp)
+        NavRow(if (Repo.demo) "Leave the demo" else "Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
+        Gap(24.dp)
     }
-    Gap(24.dp)
-    NavRow(if (Repo.demo) "Leave the demo" else "Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
 }

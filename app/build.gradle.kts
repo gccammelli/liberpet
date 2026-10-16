@@ -13,7 +13,29 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            // R8: shrink and optimise code and resources (smaller APK; F-Droid asks for it).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    // Release signing only when the key is given (GitHub releases, from CI secrets). F-Droid builds unsigned and
+    // checks its build matches ours, so both APKs are interchangeable.
+    val ks = System.getenv("LIBERPET_KEYSTORE")
+    if (ks != null) {
+        signingConfigs.create("release") {
+            storeFile = file(ks)
+            storePassword = System.getenv("LIBERPET_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("LIBERPET_KEY_ALIAS")
+            keyPassword = System.getenv("LIBERPET_KEY_PASSWORD")
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("release")
     }
 
     compileOptions {
