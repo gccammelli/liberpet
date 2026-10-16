@@ -14,12 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,67 +31,43 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.gccammelli.liberpet.CatStats
-import io.github.gccammelli.liberpet.Device
 import io.github.gccammelli.liberpet.Pet
-import io.github.gccammelli.liberpet.Repo
 import io.github.gccammelli.liberpet.CatDay
-import io.github.gccammelli.liberpet.UiState
 import io.github.gccammelli.liberpet.catStats
 import io.github.gccammelli.liberpet.local
-import io.github.gccammelli.liberpet.catDays
 import kotlin.time.Clock
 import kotlinx.datetime.minus
 
 private val PERIODS = listOf(1 to "Today", 7 to "7 days", 30 to "30 days")
 
-/** Cat Insights (GitHub #3): each cat's visits to the feeder, from what the recognizer saw in the recordings. */
+/**
+ * Cat Insights (GitHub #3, #4), in the Care tab: one cat's visits to the feeder, from what the recognizer saw in the
+ * recordings, for today, 7 or 30 days. [daily] is the recognizer's daily statistics ([catDays]).
+ */
 @Composable
-fun CatInsightsScreen(d: Device, st: UiState) {
-    val pets = feederPets(d, st)
-    var stays by remember { mutableStateOf<Map<String, Map<String, CatDay>>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+fun CatInsights(p: Pet, daily: Map<String, Map<String, CatDay>>) {
     var days by remember { mutableStateOf(7) }
-    LaunchedEffect(Unit) {
-        runCatching { Repo.ha!!.catDays() ?: error("no statistics") }.onSuccess { stays = it }.onFailure { error = it.message }
-    }
     val today = Clock.System.now().local().date.toString()
-    Page("Cat Insights", { Nav.back() }) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-            when {
-                error != null -> Card(padding = PaddingValues(20.dp)) {
-                    T("No insights yet", 16.sp, weight = FontWeight.Medium); Gap(6.dp)
-                    T("They come from LiberPet's recognizer (tools/recognizer) once it knows your cats.", 14.sp, C.Sub, lh = 20.sp)
-                }
-                stays == null -> Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = C.Green) }
-                else -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PERIODS.forEach { (n, label) ->
-                            val on = n == days
-                            Box(Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.Dark else C.Card).clickable { days = n }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)) { T(label, 14.sp, if (on) C.OnDark else C.Text) }
-                        }
-                    }
-                    Gap(12.dp)
-                    // Per-day averages over the days that have recordings, not days before recording started.
-                    val first = kotlinx.datetime.LocalDate.parse(today).minus(kotlinx.datetime.DatePeriod(days = days - 1)).toString()
-                    val covered = stays!!.keys.count { it in first..today }.coerceAtLeast(1)
-                    pets.forEach { p -> CatCard(p, catStats(stays!!, p.id, today, days), days, covered, today); Gap(12.dp) }
-                    T("From the feeder camera's recordings: visits the recognizer isn't sure about aren't counted. How much each cat " +
-                        "eats comes later.", 12.sp, C.Faint, lh = 16.sp)
-                }
-            }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        T("Insights", 18.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        PERIODS.forEach { (n, label) ->
+            val on = n == days
+            Box(Modifier.padding(start = 6.dp).clip(RoundedCornerShape(16.dp)).background(if (on) C.Dark else C.Card).clickable { days = n }
+                .padding(horizontal = 12.dp, vertical = 6.dp)) { T(label, 13.sp, if (on) C.OnDark else C.Text) }
         }
     }
+    Gap(12.dp)
+    // Per-day averages over the days that have recordings, not days before recording started.
+    val first = kotlinx.datetime.LocalDate.parse(today).minus(kotlinx.datetime.DatePeriod(days = days - 1)).toString()
+    val covered = daily.keys.count { it in first..today }.coerceAtLeast(1)
+    CatCard(catStats(daily, p.id, today, days), days, covered, today)
+    Gap(8.dp)
+    T("From the feeder camera's recordings; visits the recognizer isn't sure about aren't counted.", 12.sp, C.Faint, lh = 16.sp)
 }
 
 @Composable
-private fun CatCard(p: Pet, s: CatStats, days: Int, covered: Int, today: String) = Card(padding = PaddingValues(16.dp)) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        PetAvatar(p.avatar, p.name, 40.dp); Spacer(Modifier.width(12.dp))
-        T(p.name, 18.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        s.last?.let { T("Last visit ${lastVisit(it, today)}", 13.sp, C.Sub) }
-    }
-    Gap(14.dp)
+private fun CatCard(s: CatStats, days: Int, covered: Int, today: String) = Card(padding = PaddingValues(16.dp)) {
+    s.last?.let { T("Last visit ${lastVisit(it, today)}", 13.sp, C.Sub); Gap(10.dp) }
     if (s.visits == 0) { T(if (days == 1) "No visits seen today" else "No visits seen", 14.sp, C.Sub); return@Card }
     Row {
         Stat("${s.visits}", if (days == 1) "visits" else "visits (${fmt1(s.visits.toDouble() / covered)}/day)", Modifier.weight(1f))

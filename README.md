@@ -34,7 +34,6 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
   - live camera, muted by default, with full screen; snapshots to your photos, and a record button (with the recorder)
   - recordings gallery (optional; clips by motion or feeding, from a capped folder outside Home Assistant)
   - cat recognition (optional): you label a few short clips, and it names who ate from each bowl in every clip, on your own machine ([tools/recognizer](tools/recognizer/README.md))
-  - Cat Insights: visits, time eating, favourite bowl and eating times for each cat
   - Feed Now
   - today's amount, feeding count and schedule, with today-only skips
   - schedule list, plus adding, editing, deleting and switching plans on or off
@@ -50,7 +49,8 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
   - indicator light
   - drinking logs
   - water intake history by day, week, month and year
-- **Care:** each pet's age, breed, weight, linked devices, and today's food and water totals with 7-day trends.
+- **Care:** each pet's age, breed and weight, water with 7-day trends, and (with cat recognition) Cat Insights: visits,
+  time eating, favourite bowl and eating times for each cat. Without it, the feeder's food totals.
 
 ## What doesn't
 

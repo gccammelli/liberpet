@@ -99,7 +99,6 @@ sealed interface Screen {
     data class CameraFull(val sn: String) : Screen
     data class Gallery(val sn: String) : Screen
     data class Teach(val sn: String) : Screen
-    data class CatInsights(val sn: String) : Screen
     data class Clip(val sn: String, val id: String, val title: String) : Screen
     data class Schedule(val sn: String) : Screen
     data class PlanEdit(val sn: String, val planId: Long?) : Screen
@@ -139,7 +138,6 @@ fun Root() {
         is Screen.CameraFull -> dev(s.sn)?.let { CameraFullScreen(it, st) }
         is Screen.Gallery -> dev(s.sn)?.let { GalleryScreen(it, st) }
         is Screen.Teach -> dev(s.sn)?.let { TeachScreen(it, st) }
-        is Screen.CatInsights -> dev(s.sn)?.let { CatInsightsScreen(it, st) }
         is Screen.Clip -> ClipScreen(s.id, s.title)
         is Screen.Schedule -> dev(s.sn)?.let { ScheduleScreen(it) }
         is Screen.PlanEdit -> dev(s.sn)?.let { PlanEditScreen(it, it.plansById(s.planId)) }

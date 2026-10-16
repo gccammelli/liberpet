@@ -1,5 +1,8 @@
 package io.github.gccammelli.liberpet.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import io.github.gccammelli.liberpet.catDays
+import io.github.gccammelli.liberpet.CatDay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +65,9 @@ fun CareTab(st: UiState) {
     var sel by remember { mutableStateOf(0) }
     var trend by remember { mutableStateOf<String?>(null) }
     val pet = pets.getOrNull(sel)
+    // Cat Insights (GitHub #4): per-cat statistics from the recognizer, when it's running.
+    var daily by remember { mutableStateOf<Map<String, Map<String, CatDay>>?>(null) }
+    LaunchedEffect(Unit) { daily = runCatching { Repo.ha?.catDays() }.getOrNull() }
     Column(Modifier.fillMaxSize().background(C.Bg)) {
         Row(Modifier.fillMaxWidth().background(C.Card).statusBarsPadding().height(64.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -95,12 +101,16 @@ fun CareTab(st: UiState) {
                 }
             }
             Gap(22.dp)
-            T("Overview", 18.sp, weight = FontWeight.Medium)
-            Gap(12.dp)
             val feeders = st.home?.devices.orEmpty().filter { it.isFeeder && it.serial in pet.linkedSerials }
             val fountains = st.home?.devices.orEmpty().filter { it.isFountain && it.serial in pet.linkedSerials }
-            OverviewCard("Food Intake", "Meal", "${feeders.sumOf { it.num("today_feeding_times") ?: 0.0 }.toInt()}", "times", "Total", fmt(feeders.sumOf { it.num("today_feeding_quantity_weight") ?: 0.0 }), "g") { trend = "food" }
+            val stats = daily
+            if (stats != null && feeders.isNotEmpty()) { CatInsights(pet, stats); Gap(22.dp) }
+            T("Overview", 18.sp, weight = FontWeight.Medium)
             Gap(12.dp)
+            if (stats == null || feeders.isEmpty()) {
+                OverviewCard("Food Intake", "Meal", "${feeders.sumOf { it.num("today_feeding_times") ?: 0.0 }.toInt()}", "times", "Total", fmt(feeders.sumOf { it.num("today_feeding_quantity_weight") ?: 0.0 }), "g") { trend = "food" }
+                Gap(12.dp)
+            }
             OverviewCard("Water Intake", "Total Visits", "${fountains.sumOf { it.num("today_drinking_count") ?: 0.0 }.toInt()}", "times", "Total", fmt(fountains.sumOf { it.num("today_drinking_amount") ?: 0.0 }), "ml") { trend = "water" }
             Gap(12.dp)
             Card(padding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)) {
@@ -109,7 +119,8 @@ fun CareTab(st: UiState) {
                 Row(verticalAlignment = Alignment.Bottom) { T(fmt(pet.num("weight") ?: 0.0), 30.sp, weight = FontWeight.Medium); T(" kg", 15.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             }
             Gap(24.dp)
-            T("Food and water are the totals of the devices linked to ${pet.name}; Petlibro only splits them per pet with RFID collars.", 12.sp, C.Faint, lh = 17.sp)
+            T(if (daily != null) "Water is the total of the fountains linked to ${pet.name}; Petlibro only splits it per pet with RFID collars."
+              else "Food and water are the totals of the devices linked to ${pet.name}; Petlibro only splits them per pet with RFID collars.", 12.sp, C.Faint, lh = 17.sp)
             Gap(24.dp)
             val ts = trend
             if (ts != null) {
