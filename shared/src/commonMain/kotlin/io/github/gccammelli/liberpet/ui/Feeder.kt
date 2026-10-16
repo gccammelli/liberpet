@@ -158,7 +158,7 @@ fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().backgrou
     val cam = st.home?.let { Repo.cameraFor(d, it) }
     var muted by remember { mutableStateOf(true) }
     Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().aspectRatio(16 / 9f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
-        if (cam == null) T("Add the feeder's camera to Home Assistant to watch it here", 13.sp, Color(0xFF9A9A9A), align = TextAlign.Center, modifier = Modifier.padding(24.dp))
+        if (cam == null) T(if (Repo.demo) "Live view isn't part of the demo: with a real feeder, its camera shows here" else "Add the feeder's camera to Home Assistant to watch it here", 13.sp, Color(0xFF9A9A9A), align = TextAlign.Center, modifier = Modifier.padding(24.dp))
         else {
             LiveStream(cam, muted, Modifier.matchParentSize())
             Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {

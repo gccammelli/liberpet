@@ -40,7 +40,8 @@ object Repo {
         header.value = s.files.read(HEADER)
         val url = s.settings.getString("ha_url")
         val token = s.secrets.get("ha_token")
-        if (url != null && token != null) { ha = HaHttp(url, token); state.value = UiState(on = true) }
+        if (demo) { ha = FakeHomeAssistant(); state.value = UiState(on = true) }
+        else if (url != null && token != null) { ha = HaHttp(url, token); state.value = UiState(on = true) }
     }
 
     /** Checks the address and token by loading once; saves them only if that works. */
@@ -53,6 +54,17 @@ object Repo {
         store.secrets.set("ha_token", token.filterNot { it.isWhitespace() })
         ha = b
         state.value = UiState(on = true, home = home)
+        refresh()
+    }
+
+    /** "Try the demo": a pretend home (see [FakeHomeAssistant]), with the optional parts that work in it switched on. */
+    val demo get() = store.settings.getString("demo") == "true"
+
+    fun startDemo() {
+        store.settings.putString("demo", "true")
+        listOf(Feature.CARE_TAB, Feature.CAT_INSIGHTS).forEach { setFeature(it, true) }
+        ha = FakeHomeAssistant()
+        state.value = UiState(on = true)
         refresh()
     }
 

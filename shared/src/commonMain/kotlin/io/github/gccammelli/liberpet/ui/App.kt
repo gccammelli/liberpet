@@ -206,6 +206,9 @@ fun HomeTab(st: UiState) {
             }
         }
         Column(Modifier.offset(y = (-40).dp).padding(horizontal = 17.dp)) {
+            if (Repo.demo) Box(Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(10.dp)).background(C.Card).padding(14.dp)) {
+                T("This is the demo: a made-up home. To connect yours: Me › Settings › Leave the demo.", 13.sp, C.Sub, lh = 18.sp)
+            }
             ReorderableGrid(Repo.ordered(home.devices), st)
             if (st.error != null) T(st.error, 13.sp, C.Red, modifier = Modifier.padding(8.dp))
         }
@@ -356,6 +359,12 @@ fun Connect() {
         Gap(20.dp)
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).border(1.dp, C.Line, RoundedCornerShape(8.dp)).clickable { p.openUrl(INTEGRATION_URL) }.padding(16.dp)) {
             T("Needs the PETLIBRO integration in Home Assistant (install it from HACS and sign in there).", 13.sp, C.Blue, lh = 18.sp)
+        }
+        Gap(28.dp)
+        T("Just looking?", 15.sp, weight = FontWeight.Medium)
+        Gap(8.dp)
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).border(1.dp, C.Line, RoundedCornerShape(8.dp)).clickable { Repo.startDemo() }.padding(16.dp)) {
+            T("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.", 14.sp, C.Text, lh = 19.sp)
         }
     }
 }

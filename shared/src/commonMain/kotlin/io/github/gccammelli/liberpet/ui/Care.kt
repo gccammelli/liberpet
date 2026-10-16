@@ -283,5 +283,5 @@ fun SettingsScreen() = BigTitlePage("Settings", { Nav.back() }) {
         }
     }
     Gap(24.dp)
-    NavRow("Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
+    NavRow(if (Repo.demo) "Leave the demo" else "Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
 }
