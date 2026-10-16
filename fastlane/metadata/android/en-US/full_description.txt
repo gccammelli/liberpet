@@ -1,0 +1,23 @@
+LiberPet is an open-source app for PETLIBRO feeders and water fountains. Its screens follow the official Petlibro app's layout, so it feels familiar, but it talks only to your own Home Assistant.
+
+<b>How it works</b>
+Home Assistant does the Petlibro part, through the community PETLIBRO integration (from HACS). LiberPet reads and controls your devices through Home Assistant, using a long-lived access token that stays encrypted on your phone. Your devices still depend on Petlibro's cloud: Home Assistant reaches them through it.
+
+<b>What it does</b>
+• Home: every feeder and fountain, with problems flagged (filter or cleaning due, low water, offline)
+• Feeder: Feed Now, today's amount and schedule (with today-only skips), feeding plans, desiccant reset, feeding logs
+• Fountain: today's intake, water level, filter and cleaning status, flow mode, daily goal, history by day, week, month and year
+• Live camera for the Granary Smart Camera Feeder, through Home Assistant (local only; needs an extra setup)
+• Snapshots, and your own picture on Home
+• Light and dark themes
+• A demo with a made-up home, to try it without Home Assistant
+
+<b>Optional extras</b> (off until you switch them on, in Settings)
+• Care tab: each pet's profile, weight and water
+• Recordings: clips from LiberPet's recorder on a home server
+• Cat Recognition and Cat Insights (beta): teach LiberPet your cats, then see each cat's visits, time eating and favourite bowl
+
+<b>What you need</b>
+Home Assistant with the PETLIBRO integration, signed in to a Petlibro account. The extras need a computer at home that's always on; see the project page for the guides.
+
+LiberPet isn't affiliated with PETLIBRO. PETLIBRO is a trademark of its owner. Tested with the Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountain (PLWF105).

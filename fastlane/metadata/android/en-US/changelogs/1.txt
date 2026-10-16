@@ -1,0 +1,1 @@
+First release: feeders and fountains through your own Home Assistant, live camera, demo mode, and optional extras (Care tab, recordings, cat recognition and insights in beta).
