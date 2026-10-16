@@ -48,10 +48,27 @@ they move, their size and their coat.
    The token must be an administrator's, because publishing an entity's state needs one; the recorder's token works.
    Optional settings: `split` (where the feeder's post is, as fractions of the width, default `[0.36, 0.44]`) and
    `threads` (CPU threads, default 4).
-4. **Run** it as a service, like the recorder:
+4. **Run** it as a service, like the recorder. A systemd user service,
+   `~/.config/systemd/user/liberpet-recognizer.service` (paths: wherever you installed it):
+   ```ini
+   [Unit]
+   Description=LiberPet recognizer (which cat is at which bowl)
+   After=liberpet-recorder.service
+
+   [Service]
+   ExecStart=%h/liberpet-recognizer/venv/bin/python -u %h/liberpet-recognizer/liberpet_recognizer.py --config %h/liberpet-recognizer/recognizer.json
+   Nice=10
+   Restart=always
+   RestartSec=30
+
+   [Install]
+   WantedBy=default.target
    ```
-   venv/bin/python -u liberpet_recognizer.py --config recognizer.json
-   ```
+   Then `systemctl --user daemon-reload && systemctl --user enable --now liberpet-recognizer`, and
+   `loginctl enable-linger` so it keeps running when you're logged out.
+
+**What it needs:** a computer that's always on (the same one as the recorder), about 1 GB of memory, and a few CPU
+seconds per clip (4 threads by default; `threads` changes it). No graphics card.
 
 It processes new clips once a minute. Pictures of clips the recorder deletes for space go too, except labelled ones.
 
