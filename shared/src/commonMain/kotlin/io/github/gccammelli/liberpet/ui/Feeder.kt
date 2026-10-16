@@ -639,6 +639,10 @@ fun FeederSettingsScreen(d: Device) {
             Gap(12.dp)
             NavRow("Camera Settings", d.state("resolution")?.takeIf { it != "unknown" }) { sheet = "camera" }
             Gap(12.dp)
+            if (io.github.gccammelli.liberpet.Feature.RECORDINGS.on()) {
+                NavRow("Motion Detection", "Area and sensitivity") { Nav.go(Screen.Motion(d.serial)) }
+                Gap(12.dp)
+            }
             NavRow("Firmware Settings", d.firmware?.let { "V$it" }) { sheet = "firmware" }
             Gap(24.dp)
         }

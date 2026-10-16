@@ -5,7 +5,8 @@ gallery. Python 3.10+ and ffmpeg, nothing else.
 
 It keeps the camera stream open and a rolling buffer of the last few minutes as short segments, so a clip can start
 before whatever triggered it. Triggers:
-  - motion: low-resolution frame differences (about twice a second);
+  - motion: low-resolution frame differences (about twice a second), over the area and at the sensitivity set in
+    LiberPet (Feeder › Settings › Motion Detection, kept in Home Assistant's "input_text.liberpet_recorder");
   - feedings: the PETLIBRO integration's "Recent Activity" sensor in Home Assistant (optional; its records carry the
     exact dispense time, so the buffer covers Home Assistant's polling delay);
   - continuous mode: everything, in 5-minute clips;
@@ -51,7 +52,27 @@ DEFAULTS = {
     "ha_token_file": None,       # file holding a long-lived access token
     "activity_entities": [],     # e.g. ["sensor.granary_camera_feeder_recent_activity"]
     "record_button": "input_button.liberpet_record",  # LiberPet's record button; its state is the press time
+    "settings_entity": "input_text.liberpet_recorder",  # motion area and sensitivity, set in LiberPet (optional)
 }
+GRID_COLS, GRID_ROWS = 16, 9  # LiberPet's motion grid; each square is 10x10 motion pixels
+
+
+def motion_settings(value):
+    """LiberPet's "s=<1-100>;m=<36 hex digits>" (sensitivity; watched grid squares, row by row) as (threshold, pixel
+    indices to watch), or None if it doesn't parse. Sensitivity 50 is the old fixed threshold, 0.015; every 12.5 steps
+    halve or double it."""
+    parts = dict(p.split("=", 1) for p in value.split(";") if "=" in p)
+    try:
+        s = min(100, max(1, int(parts["s"])))
+        bits = bin(int(parts["m"], 16))[2:].zfill(len(parts["m"]) * 4)[:GRID_COLS * GRID_ROWS]
+    except (KeyError, ValueError):
+        return None
+    if len(bits) < GRID_COLS * GRID_ROWS:
+        return None
+    cw, ch = W // GRID_COLS, H // GRID_ROWS
+    idx = [y * W + x for y in range(H) for x in range(W)
+           if bits[min(y // ch, GRID_ROWS - 1) * GRID_COLS + min(x // cw, GRID_COLS - 1)] == "1"]
+    return 0.015 * 2 ** ((50 - s) / 12.5), idx
 
 
 def log(*a):
@@ -77,6 +98,9 @@ class Recorder:
         self.lock = threading.Lock()
         self.seen_records = set()
         self.motion_on = False
+        self.threshold = cfg["motion_threshold"]
+        self.watch = None  # pixel indices to check; None = all
+        self.settings_value = None
 
     # ---- triggers ----
 
@@ -96,14 +120,18 @@ class Recorder:
         hot = 0
         last_motion = 0.0
         n = W * H
-        delta, threshold = self.cfg["motion_pixel_delta"], self.cfg["motion_threshold"]
+        delta = self.cfg["motion_pixel_delta"]
         while True:
             frame = frames.read(n)
             if len(frame) < n:
                 return  # ffmpeg ended
             if prev is not None:
-                changed = sum(1 for a, b in zip(frame, prev) if abs(a - b) > delta) / n
-                hot = hot + 1 if changed > threshold else 0
+                watch = self.watch  # set from LiberPet at any time
+                if watch is None:
+                    changed = sum(1 for a, b in zip(frame, prev) if abs(a - b) > delta) / n
+                else:
+                    changed = sum(1 for i in watch if abs(frame[i] - prev[i]) > delta) / len(watch) if watch else 0.0
+                hot = hot + 1 if changed > self.threshold else 0
                 now = time.time()
                 if hot >= 2:  # two frames in a row, so single glitches don't count
                     last_motion = now
@@ -113,7 +141,8 @@ class Recorder:
 
     def feed_loop(self):
         url, entities, button = self.cfg["ha_url"], self.cfg["activity_entities"], self.cfg["record_button"]
-        if not url or not (entities or button) or not self.cfg["ha_token_file"]:
+        settings = self.cfg["settings_entity"]
+        if not url or not (entities or button or settings) or not self.cfg["ha_token_file"]:
             return
         token = Path(self.cfg["ha_token_file"]).read_text().strip()
 
@@ -138,6 +167,21 @@ class Recorder:
                         log("record button poll failed:", e)
                 except Exception as e:
                     log("record button poll failed:", e)
+            if settings:
+                try:
+                    value = state(settings)["state"]
+                    if value != self.settings_value:
+                        self.settings_value = value
+                        parsed = motion_settings(value)
+                        if parsed:
+                            self.threshold, idx = parsed
+                            self.watch = None if len(idx) == W * H else idx
+                            log(f"motion settings: threshold {self.threshold:.4f}, watching {len(idx) * 100 // (W * H)}% of the picture")
+                except urllib.error.HTTPError as e:
+                    if e.code != 404:  # 404: no settings helper, keep recorder.json's
+                        log("settings poll failed:", e)
+                except Exception as e:
+                    log("settings poll failed:", e)
             for ent in entities:
                 try:
                     records = state(ent).get("attributes", {}).get("records", [])
@@ -157,7 +201,7 @@ class Recorder:
                     if t > time.time() - self.cfg["buffer_s"] + self.cfg["pre_roll_s"]:
                         self.trigger(t - self.cfg["pre_roll_s"], t + self.cfg["feed_post_s"], "feed")
             first = False
-            time.sleep(5 if button else 20)  # the record button wants a quicker answer; the buffer covers the wait
+            time.sleep(5 if button or settings else 20)  # the record button wants a quicker answer; the buffer covers the wait
 
     # ---- clips ----
 

@@ -104,6 +104,7 @@ sealed interface Screen {
     data class Schedule(val sn: String) : Screen
     data class PlanEdit(val sn: String, val planId: Long?) : Screen
     data class FeederSettings(val sn: String) : Screen
+    data class Motion(val sn: String) : Screen
     data class Logs(val sn: String) : Screen
     data class Fountain(val sn: String) : Screen
     data class WaterIntake(val sn: String) : Screen
@@ -143,6 +144,7 @@ fun Root() {
         is Screen.Schedule -> dev(s.sn)?.let { ScheduleScreen(it) }
         is Screen.PlanEdit -> dev(s.sn)?.let { PlanEditScreen(it, it.plansById(s.planId)) }
         is Screen.FeederSettings -> dev(s.sn)?.let { FeederSettingsScreen(it) }
+        is Screen.Motion -> dev(s.sn)?.let { MotionScreen(it) }
         is Screen.Logs -> dev(s.sn)?.let { LogsScreen(it, st) }
         is Screen.Fountain -> dev(s.sn)?.let { FountainScreen(it, st) }
         is Screen.WaterIntake -> dev(s.sn)?.let { WaterIntakeScreen(it, st) }

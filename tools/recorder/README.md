@@ -6,7 +6,8 @@ Python 3.10+ and ffmpeg, nothing else. It reads the stream from [go2rtc](../../d
 It keeps the camera stream open with a rolling buffer of the last few minutes, so each clip can start before the
 thing that triggered it:
 
-- **Motion:** compares tiny greyscale frames about twice a second.
+- **Motion:** compares tiny greyscale frames about twice a second, over the area and at the sensitivity you choose in
+  LiberPet (see [Motion detection](#motion-detection)).
 - **Feedings:** optional, from the PETLIBRO integration's *Recent Activity* sensor in Home Assistant. Its records
   carry the exact dispense time, so clips start before the dispense even though Home Assistant polls once a minute.
 - **Continuous:** everything, in 5-minute clips.
@@ -33,7 +34,7 @@ deleted. `status.json` reports usage.
 | `pre_roll_s` | `10` | seconds kept before each trigger |
 | `buffer_s` | `180` | how far back the buffer reaches; must cover Home Assistant's delay for feed records |
 | `motion` | `true` | motion clips on or off |
-| `motion_threshold` | `0.015` | share of pixels that must change |
+| `motion_threshold` | `0.015` | share of pixels that must change (LiberPet's sensitivity replaces it) |
 | `motion_pixel_delta` | `25` | change (0–255) that counts for one pixel |
 | `motion_post_s` | `15` | keep recording this long after motion stops |
 | `feed_post_s` | `60` | length after a feeding |
@@ -41,8 +42,20 @@ deleted. `status.json` reports usage.
 | `ha_url` | none | Home Assistant address, for feed clips |
 | `ha_token_file` | none | a file holding a long-lived access token |
 | `activity_entities` | `[]` | e.g. `["sensor.<feeder>_recent_activity"]` |
+| `settings_entity` | `input_text.liberpet_recorder` | the motion settings LiberPet saves |
 
 At about 0.7 Mbit/s (1080p), 128 GB holds roughly two weeks of continuous footage, and far longer as event clips.
+
+## Motion detection
+
+If the camera records almost all the time, something in view keeps changing: a window, a TV, shadows, or night-vision
+noise. In LiberPet, **Feeder › Settings › Motion Detection** shows the camera picture under a grid: dim the squares to
+ignore (keep the bowls and the floor in front of them), and lower the sensitivity. 50 is the default; each step of
+about 12 halves or doubles how much has to change. The recorder picks up a change within seconds, no restart needed.
+
+Set it up once: in Home Assistant, **Settings › Devices & services › Helpers › Create helper › Text**, named
+`LiberPet recorder` (entity `input_text.liberpet_recorder`), and give the recorder `ha_url` and `ha_token_file`.
+Without the helper, the recorder uses `motion_threshold` from `recorder.json` over the whole picture.
 
 ## Running it as a service
 

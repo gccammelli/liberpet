@@ -262,6 +262,42 @@ suspend fun HaBackend.recordClip(): Boolean {
     return true
 }
 
+/** The Home Assistant text helper holding the recorder's motion settings, which the recorder reads (tools/recorder). */
+const val RECORDER_SETTINGS = "input_text.liberpet_recorder"
+const val MOTION_COLS = 16
+const val MOTION_ROWS = 9
+
+/**
+ * Where motion counts ([cells]: a 16×9 grid over the picture, row by row, true = watched) and how much of it starts a
+ * clip ([sensitivity] 1–100; 50 is the recorder's old fixed threshold). Stored as "s=50;m=<36 hex digits>", within an
+ * input_text's default 100 characters.
+ */
+data class MotionSettings(val sensitivity: Int = 50, val cells: List<Boolean> = List(MOTION_COLS * MOTION_ROWS) { true }) {
+    fun encode() = "s=$sensitivity;m=" + cells.chunked(4).joinToString("") { b ->
+        b.foldIndexed(0) { i, acc, on -> if (on) acc or (8 shr i) else acc }.toString(16)
+    }
+
+    companion object {
+        fun decode(v: String): MotionSettings {
+            val parts = v.split(';').mapNotNull { it.split('=', limit = 2).takeIf { p -> p.size == 2 }?.let { (k, x) -> k to x } }.toMap()
+            val hex = parts["m"].orEmpty()
+            return MotionSettings(
+                parts["s"]?.toIntOrNull()?.coerceIn(1, 100) ?: 50,
+                if (hex.length * 4 < MOTION_COLS * MOTION_ROWS) MotionSettings().cells
+                else List(MOTION_COLS * MOTION_ROWS) { i -> (hex[i / 4].digitToIntOrNull(16) ?: 15) and (8 shr (i % 4)) != 0 })
+        }
+    }
+}
+
+/** The recorder's motion settings; null if [RECORDER_SETTINGS] doesn't exist in Home Assistant yet. */
+suspend fun HaBackend.motionSettings(): MotionSettings? = try {
+    MotionSettings.decode(json.parseToJsonElement(get("/api/states/$RECORDER_SETTINGS")).jsonObject.s("state").orEmpty())
+} catch (e: ApiException) { null }
+
+suspend fun HaBackend.setMotionSettings(m: MotionSettings) {
+    post("/api/services/input_text/set_value", buildJsonObject { put("entity_id", RECORDER_SETTINGS); put("value", m.encode()) }.toString())
+}
+
 // ---------- Recordings (the recorder's folder, shared to Home Assistant as network media storage) ----------
 
 /** Home Assistant media folder holding the recorder's clips (network storage named "liberpet", usage Media). */
