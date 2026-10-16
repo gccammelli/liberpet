@@ -47,8 +47,8 @@ class FakeHomeAssistant(
         val shift = now() - Instant.parse(raw.s("t0")!!)
         val shifted = shiftTimes(raw, shift).jsonObject
         registry = Triple(shifted.a("devices")!!, shifted.a("entities")!!, shifted.a("areas")!!)
-        return shifted.a("states")!!.associate { it.jsonObject.s("entity_id")!! to it.jsonObject }.toMutableMap()
-            .also { m -> m.replaceAll { _, st -> livened(st) }; states = m }
+        return shifted.a("states")!!.associate { it.jsonObject.s("entity_id")!! to livened(it.jsonObject) }.toMutableMap()
+            .also { states = it }
     }
 
     /** Moves every date-time in the snapshot forward, so "2 hours ago" stays 2 hours ago. Dates alone (birthdays) stay. */
