@@ -17,13 +17,17 @@ import platform.AVFoundation.play
 import platform.AVFoundation.setMuted
 import platform.AVKit.AVPlayerViewController
 import platform.Foundation.NSURL
+import platform.Foundation.NSNotificationCenter
+import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
+import platform.AVFoundation.seekToTime
+import platform.CoreMedia.CMTimeMake
 
 /**
  * AVPlayer plays Home Assistant's HLS natively. Live view: no controls; recordings: the system's own controls
  * (play/pause and a scrubber), aspect-fit either way.
  */
 @Composable
-actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError: (String) -> Unit, controls: Boolean) {
+actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError: (String) -> Unit, controls: Boolean, loop: Boolean) {
     val player = remember(url) { AVPlayer(uRL = NSURL.URLWithString(url)!!) }
     LaunchedEffect(player, muted) { player.setMuted(muted) }
     // AVPlayer reports failure on the item's status (KVO); polling it is enough here.
@@ -35,7 +39,14 @@ actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError:
             delay(1000)
         }
     }
-    DisposableEffect(player) { player.play(); onDispose { player.pause() } }
+    DisposableEffect(player) {
+        // Looping (labelling clips): back to the start whenever the item ends.
+        val end = if (loop) NSNotificationCenter.defaultCenter.addObserverForName(AVPlayerItemDidPlayToEndTimeNotification, player.currentItem, null) { _ ->
+            player.seekToTime(CMTimeMake(0, 1)); player.play()
+        } else null
+        player.play()
+        onDispose { player.pause(); end?.let { NSNotificationCenter.defaultCenter.removeObserver(it) } }
+    }
     UIKitViewController(
         factory = { AVPlayerViewController().apply { this.player = player; showsPlaybackControls = controls } },
         modifier = modifier,

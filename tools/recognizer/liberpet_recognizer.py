@@ -38,8 +38,8 @@ DEFAULTS = {
     "cat_score": 0.02,               # CLIP "cat" minus "empty bowl" similarity a picture needs to count
     "queue": 6,                      # pictures offered for labelling at a time
     "k": 5,
-    "ready_labels": 8,               # labels per cat before "ready" is possible
-    "ready_accuracy": 0.9,           # leave-one-out accuracy needed for "ready"
+    "ready_labels": 3,               # labelled segments (stretches at a bowl) per cat before "ready" is possible
+    "ready_accuracy": 0.9,           # share of labelled segments named right when each is left out
     "threads": 4,                    # CPU threads for the model, so the recognizer doesn't take the whole machine
 }
 MODEL, TEXT_MODEL = "Qdrant/clip-ViT-B-32-vision", "Qdrant/clip-ViT-B-32-text"
@@ -83,7 +83,8 @@ class Brain:
 
     def _vote(self, i, exclude=None):
         """(best label, confidence 0..1) from the k most similar labelled pictures."""
-        lab = [(self.pos[p], l) for p, l in self.labels.items() if p in self.pos and self.pos[p] != exclude]
+        exclude = exclude or set()
+        lab = [(self.pos[p], l) for p, l in self.labels.items() if p in self.pos and self.pos[p] not in exclude]
         if not lab:
             return None, 0.0
         idx = np.array([j for j, _ in lab]); sims = self.emb[idx] @ self.emb[i]
@@ -98,55 +99,101 @@ class Brain:
         return self._vote(self.pos[pid])
 
     def accuracy(self):
-        """Leave-one-out accuracy over the labelled pictures, and the number of labels per label value."""
-        counts = {}
-        for l in self.labels.values():
-            counts[l] = counts.get(l, 0) + 1
-        right = total = 0
+        """
+        How often it names a labelled segment right when that whole segment is left out (so near-identical frames
+        can't vouch for each other), and the number of labelled segments per label value.
+        """
+        segs = {}
         for p, l in self.labels.items():
             if p in self.pos:
-                guess, _ = self._vote(self.pos[p], exclude=self.pos[p])
-                total += 1; right += guess == l
-        return (right / total if total else 0.0), counts
+                segs.setdefault(self.meta[p].get("seg", p), (l, []))[1].append(p)
+        counts = {}
+        for l, _ in segs.values():
+            counts[l] = counts.get(l, 0) + 1
+        right = 0
+        for l, ps in segs.values():
+            excl = {self.pos[p] for p in ps}
+            votes = {}
+            for p in ps[:: max(1, len(ps) // 5)]:  # a few of its pictures
+                g, c = self._vote(self.pos[p], exclude=excl)
+                if g:
+                    votes[g] = votes.get(g, 0) + c
+            right += bool(votes) and max(votes, key=votes.get) == l
+        return (right / len(segs) if segs else 0.0), counts
 
-    def to_label(self, n, recent=3000):
+    def segments(self, gap=3, split=0.86, min_len=3, max_len=20):
         """
-        Unlabelled cat pictures to ask about next (at most one per clip and bowl, left and right in turn).
-        With labels for two or more cats: the ones it's least sure about. Before that: the ones least like any
-        labelled picture, which is where an unlabelled cat is. Ties go to pictures where more of the cat shows.
+        Stretches with one cat at one bowl: {id: {clip, side, t0, t1, pids}}. A bowl's cat pictures split where it
+        stays empty for more than [gap] seconds or where the picture's fingerprint jumps (the 3 seconds before vs
+        the 3 after less similar than [split]): cats can swap bowls within a clip. Shorter than [min_len] s: dropped;
+        longer than [max_len] s: cut into pieces, so each labelling video stays short and watchable.
         """
-        cands = [p for p in self.ids[-recent * 4:] if p not in self.labels and self.meta[p]["cat"]][-recent:]
-        if not cands:
+        runs = {}
+        for p in self.ids:
+            m = self.meta[p]
+            if m["cat"]:
+                runs.setdefault((m["clip"], m["side"]), []).append((m["t"], p))
+        out = {}
+        for (clip, side), v in runs.items():
+            v.sort()
+            cur = []
+            for i, (t, p) in enumerate(v):
+                if cur and (t - cur[-1][0] > gap or t - cur[0][0] >= max_len or self._jump(cur[-3:], v[i:i + 3], split)):
+                    self._close(out, clip, side, cur, min_len); cur = []
+                cur.append((t, p))
+            self._close(out, clip, side, cur, min_len)
+        return out
+
+    def _jump(self, before, after, split):
+        x = self.emb[[self.pos[p] for _, p in before]].mean(0); y = self.emb[[self.pos[p] for _, p in after]].mean(0)
+        return float(x @ y / (np.linalg.norm(x) * np.linalg.norm(y))) < split
+
+    @staticmethod
+    def _close(out, clip, side, cur, min_len):
+        if cur and cur[-1][0] - cur[0][0] + 1 >= min_len:
+            sid = f"{clip.replace('/', '_')}_{side[0]}{cur[0][0]:03d}"
+            out[sid] = {"clip": clip, "side": side, "t0": cur[0][0], "t1": cur[-1][0], "pids": [p for _, p in cur]}
+
+    def label_segment(self, seg_id, seg, pet):
+        for p in seg["pids"]:
+            self.labels[p] = pet
+            self.meta[p]["seg"] = seg_id
+
+    def segments_to_label(self, n, segs=None):
+        """The unlabelled segments to ask about next, as (id, segment): least sure first (see [to_label]), bowls in turn."""
+        segs = self.segments() if segs is None else segs
+        open_ = {sid: g for sid, g in segs.items() if not any(p in self.labels for p in g["pids"])}
+        if not open_:
             return []
-        lab = [(self.pos[p], l) for p, l in self.labels.items() if p in self.pos]
-        cats = {l for _, l in lab if l != NONE}
-        if lab:
-            L = self.emb[[j for j, _ in lab]]; S = self.emb[[self.pos[p] for p in cands]] @ L.T
-        if len(cats) >= 2:  # margin between the two best labels' summed similarity
-            names = sorted({l for _, l in lab}); col = {l: i for i, l in enumerate(names)}
-            top = np.argsort(-S, axis=1)[:, : self.k]
-            sure = []
-            for r in range(len(cands)):
-                v = np.zeros(len(names))
-                for t in top[r]:
-                    v[col[lab[t][1]]] += max(S[r, t], 0)
-                v = np.sort(v)[::-1]
-                sure.append((v[0] - (v[1] if len(v) > 1 else 0)) / (v.sum() or 1))
-        elif lab:
-            sure = list(S.max(axis=1))  # similarity to the nearest labelled picture: low = something new
-        else:
-            sure = [0.0] * len(cands)
-        order = sorted(range(len(cands)), key=lambda r: (round(float(sure[r]), 2), -self.meta[cands[r]].get("face", 0.0)))
-        by_side, seen = {"left": [], "right": []}, set()
-        for r in order:
-            p = cands[r]; key = (self.meta[p]["clip"], self.meta[p]["side"])
-            if key not in seen:
-                seen.add(key); by_side[self.meta[p]["side"]].append(p)
+        pids = [p for g in open_.values() for p in g["pids"]]
+        sure = self._sureness(pids)
+        score = {sid: float(np.mean([sure[p] for p in g["pids"]])) for sid, g in open_.items()}
+        order = sorted(open_, key=lambda sid: (round(score[sid], 2), -len(open_[sid]["pids"])))
+        by_side = {"left": [x for x in order if open_[x]["side"] == "left"], "right": [x for x in order if open_[x]["side"] == "right"]}
         out = []
         while len(out) < n and (by_side["left"] or by_side["right"]):
             for side in ("left", "right"):
                 if by_side[side] and len(out) < n:
-                    out.append(by_side[side].pop(0))
+                    sid = by_side[side].pop(0); out.append((sid, open_[sid]))
+        return out
+
+    def _sureness(self, cands):
+        """Per picture: margin between the two best labels (two or more cats labelled), else similarity to the nearest labelled picture."""
+        lab = [(self.pos[p], l) for p, l in self.labels.items() if p in self.pos]
+        if not lab:
+            return {p: 0.0 for p in cands}
+        L = self.emb[[j for j, _ in lab]]; S = self.emb[[self.pos[p] for p in cands]] @ L.T
+        if len({l for _, l in lab if l != NONE}) < 2:
+            return dict(zip(cands, S.max(axis=1).tolist()))
+        names = sorted({l for _, l in lab}); col = {l: i for i, l in enumerate(names)}
+        top = np.argsort(-S, axis=1)[:, : self.k]
+        out = {}
+        for r, p in enumerate(cands):
+            v = np.zeros(len(names))
+            for t in top[r]:
+                v[col[lab[t][1]]] += max(S[r, t], 0)
+            v = np.sort(v)[::-1]
+            out[p] = float((v[0] - (v[1] if len(v) > 1 else 0)) / (v.sum() or 1))
         return out
 
     def clip_cats(self, clip):
@@ -187,6 +234,7 @@ class Recognizer:
             if "face" not in self.brain.meta[p]:
                 self.brain.meta[p]["face"] = self.face(self.brain.emb[self.brain.pos[p]][None])[0]
         self.last_label = None
+        self.segs = {}
 
     # ---- storage ----
 
@@ -244,25 +292,29 @@ class Recognizer:
         self.done.add(rel)
         log("processed", rel, f"{len(crops)} bowl pictures, {sum(1 for m in metas if m.get('cat'))} with a cat")
 
-    def picture(self, pid):
-        """The labelling picture in the shared folder (cut again from the clip if needed)."""
-        dst = self.learn / f"{pid}.jpg"
+    def render(self, sid, seg):
+        """
+        The labelling video in the shared folder: the segment (at most 10 s to watch, sped up if longer) with the
+        other bowl dimmed, plus a poster frame. Built under a temporary name, then renamed.
+        """
+        dst = self.learn / f"{sid}.mp4"
         if dst.exists():
             return
-        m = self.brain.meta[pid]
-        mp4 = self.out / f"{m['clip']}.mp4"
-        tmp = self.data / "pick.jpg"
-        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-ss", str(m["t"]), "-i", str(mp4), "-frames:v", "1",
-                        "-vf", "scale=896:-2", "-update", "1", str(tmp)], check=False)
-        if not tmp.exists():
-            return
-        im = Image.open(tmp).convert("RGB"); w, h = im.size
+        mp4 = self.out / f"{seg['clip']}.mp4"
+        start, dur = max(seg["t0"] - 1, 0), seg["t1"] - seg["t0"] + 2  # at most 22 s: shown in 10 s or less
         a, b = self.cfg["split"]
-        # The whole picture for context (body, fur, the other cat), with the other bowl's side dimmed.
-        dim = (int(w * a), 0, w, h) if m["side"] == "left" else (0, 0, int(w * b), h)
-        im.paste(im.crop(dim).point(lambda v: v * 0.3), dim[:2])
-        part = self.learn / f".{pid}.jpg.part"
-        im.save(part, "JPEG", quality=85); part.replace(dst)
+        dim = f"drawbox=x=iw*{a}:y=0:w=iw*{1 - a}:h=ih:color=black@0.65:t=fill" if seg["side"] == "left" \
+            else f"drawbox=x=0:y=0:w=iw*{b}:h=ih:color=black@0.65:t=fill"
+        part = self.learn / f".{sid}.part.mp4"
+        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-ss", str(start), "-t", str(dur), "-i", str(mp4),
+                        "-vf", f"scale=640:-2,{dim},setpts={min(1.0, 10 / dur):.3f}*PTS", "-an", "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "28", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(part)], check=False)
+        if part.exists() and part.stat().st_size:
+            poster = self.learn / f".{sid}.part.jpg"
+            subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", str(part), "-frames:v", "1", "-update", "1", str(poster)], check=False)
+            if poster.exists():
+                poster.replace(self.learn / f"{sid}.jpg")
+            part.replace(dst)
 
     # ---- Home Assistant ----
 
@@ -290,23 +342,37 @@ class Recognizer:
         first = self.last_label is None
         self.last_label = v
         pid, pet = v.split("=", 1)
-        if first and pid in self.brain.labels:
+        seg = self.segs.get(pid)
+        if first and (pid in self.brain.labels or (seg and seg["pids"][0] in self.brain.labels)):
             return False  # the helper still shows the last label from before a restart
-        if pid in self.brain.meta and pet:
+        if seg and pet:
+            self.brain.label_segment(pid, seg, pet)
+            log("label", pid, f"({len(seg['pids'])} pictures)", "=", pet)
+            return True
+        if pid in self.brain.meta and pet:  # a single picture (older labelling)
             self.brain.labels[pid] = pet
             log("label", pid, "=", pet)
             return True
         return False
 
+    def guess(self, seg):
+        votes = {}
+        for p in seg["pids"][:: max(1, len(seg["pids"]) // 5)]:
+            g, c = self.brain.predict(p)
+            if g:
+                votes[g] = votes.get(g, 0) + c
+        return max(votes, key=votes.get) if votes else None
+
     def publish(self):
         acc, counts = self.brain.accuracy()
         pets = {p: n for p, n in counts.items() if p != NONE}
         ready = len(pets) >= 2 and min(pets.values()) >= self.cfg["ready_labels"] and acc >= self.cfg["ready_accuracy"]
-        queue = self.brain.to_label(self.cfg["queue"])
-        for pid in queue:
-            self.picture(pid)
-        keep = {f"{p}.jpg" for p in queue} | {f"{p}.jpg" for p in self.brain.labels}
-        for f in self.learn.glob("*.jpg"):
+        self.segs = self.brain.segments()
+        queue = self.brain.segments_to_label(self.cfg["queue"], self.segs)
+        for sid, seg in queue:
+            self.render(sid, seg)
+        keep = {f"{sid}.{ext}" for sid, _ in queue for ext in ("mp4", "jpg")}
+        for f in list(self.learn.glob("*.mp4")) + list(self.learn.glob("*.jpg")):
             if f.name not in keep:
                 f.unlink()
         clips = {}
@@ -318,8 +384,9 @@ class Recognizer:
             "friendly_name": "LiberPet cats",
             "accuracy": round(acc, 2), "labels": counts, "pictures": len(self.brain.ids),
             "cat_pictures": sum(1 for m in self.brain.meta.values() if m["cat"]),
-            "to_label": [{"id": p, "path": f"_learn/{p}.jpg", "side": self.brain.meta[p]["side"],
-                          "guess": self.brain.predict(p)[0]} for p in queue],
+            "to_label": [{"id": sid, "path": f"_learn/{sid}.jpg", "video": f"_learn/{sid}.mp4", "side": seg["side"],
+                          "seconds": seg["t1"] - seg["t0"] + 1, "guess": self.guess(seg)}
+                         for sid, seg in queue if (self.learn / f"{sid}.mp4").exists()],
             "clips": clips,
         }
         state = "ready" if ready else ("learning" if self.brain.ids else "waiting")
@@ -330,6 +397,12 @@ class Recognizer:
 
     def run(self):
         log("starting:", len(self.brain.ids), "pictures,", len(self.brain.labels), "labels")
+        self.segs = self.brain.segments()
+        # Labels from before segments (single pictures): each now labels its whole segment.
+        for sid, seg in self.segs.items():
+            single = {self.brain.labels[p] for p in seg["pids"] if p in self.brain.labels and "seg" not in self.brain.meta[p]}
+            if len(single) == 1:
+                self.brain.label_segment(sid, seg, single.pop())
         last_scan = 0.0
         changed = True
         while True:

@@ -258,7 +258,9 @@ class Recorder:
         self.enforce_cap()
         backoff = 5
         while True:
-            cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-rtsp_transport", "tcp", "-i", self.cfg["stream"],
+            # Arrival time for both streams: the camera stamps its audio ~17 s apart from its video, which made every
+            # 2 s buffer piece claim ~19 s (clips ten times too long, audio out of sync).
+            cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-rtsp_transport", "tcp", "-use_wallclock_as_timestamps", "1", "-i", self.cfg["stream"],
                    # 1) the buffer: short segments named by their start time
                    "-map", "0", "-c", "copy", "-f", "segment", "-segment_time", str(SEGMENT_S), "-segment_format", "mpegts",
                    "-reset_timestamps", "1", "-strftime", "1", str(self.buf / "%s.ts")]

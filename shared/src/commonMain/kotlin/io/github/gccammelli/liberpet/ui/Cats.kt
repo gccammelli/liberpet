@@ -9,8 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +49,8 @@ import io.github.gccammelli.liberpet.UiState
 import io.github.gccammelli.liberpet.cats
 import io.github.gccammelli.liberpet.label
 import io.github.gccammelli.liberpet.recordingsFolder
+import io.github.gccammelli.liberpet.resolveMedia
+import io.github.gccammelli.liberpet.VideoPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -60,7 +63,7 @@ private fun progress(c: Cats): String {
     val right = if (n >= 4) " · ${(c.accuracy * 100).toInt()}% right" else ""
     return when (c.state) {
         "ready" -> "Knows your cats$right"
-        "learning" -> if (n == 0) "Label a few photos so it can tell your cats apart" else "Learning · $n photo${if (n == 1) "" else "s"} labelled$right"
+        "learning" -> if (n == 0) "Label a few clips so it can tell your cats apart" else "Learning · $n clip${if (n == 1) "" else "s"} labelled$right"
         else -> "Waiting for the first clips with a cat"
     }
 }
@@ -133,22 +136,20 @@ fun TeachScreen(d: Device, st: UiState) {
                     Progress(c, pets)
                     Gap(16.dp)
                     val photo = c.toLabel.firstOrNull { it.id !in skipped }
-                    if (photo == null) Note(if (c.state == "ready") "All caught up" else "No photos to label right now",
+                    if (photo == null) Note(if (c.state == "ready") "All caught up" else "No clips to label right now",
                         "New ones come with the cats' next visits to the feeder.")
                     else {
                         Card(padding = PaddingValues(0.dp)) {
-                            Box(Modifier.fillMaxWidth().heightIn(min = 240.dp).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
-                                val img = rememberHaImage("/media/local/$folder/${photo.path}", 900)
-                                if (img != null) Image(img, "The ${photo.side} bowl", Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
-                                else CircularProgressIndicator(color = Color.White)
+                            Box(Modifier.fillMaxWidth().aspectRatio(16 / 9f).background(Color(0xFF1E1E1E)), contentAlignment = Alignment.Center) {
+                                LearnClip(photo, folder!!)
                                 if (saving) Box(Modifier.matchParentSize().background(Color(0x66000000)), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(color = Color.White)
                                 }
                             }
                         }
                         Gap(16.dp)
-                        T("Who's at the ${photo.side} bowl?", 18.sp, weight = FontWeight.Medium)
-                        T("The bright side of the picture", 13.sp, C.Sub)
+                        T("Who's at the ${photo.side} bowl in this clip?", 18.sp, weight = FontWeight.Medium)
+                        T("The bright side of the video", 13.sp, C.Sub)
                         photo.guess?.let { g -> (if (g == NO_CAT) "no cat" else pets.firstOrNull { it.id == g }?.name)?.let {
                             Gap(4.dp); T("LiberPet thinks: $it", 13.sp, C.Sub)
                         } }
@@ -186,7 +187,7 @@ private fun Progress(c: Cats, pets: List<Pet>) = Card(padding = PaddingValues(16
         }
         T("No cat: ${c.labels[NO_CAT] ?: 0}", 14.sp, C.Sub)
     }
-    if (c.state != "ready") { Gap(8.dp); T("It asks about the photos it's least sure of. About 10 per cat is usually enough.", 12.sp, C.Faint, lh = 16.sp) }
+    if (c.state != "ready") { Gap(8.dp); T("It asks about the clips it's least sure of; a cat changing bowls is a new question. About 3–5 clips per cat is usually enough.", 12.sp, C.Faint, lh = 16.sp) }
 }
 
 @Composable
@@ -197,4 +198,21 @@ private fun Choice(enabled: Boolean, onClick: () -> Unit, content: @Composable (
 @Composable
 private fun Note(title: String, body: String) = Card(padding = PaddingValues(20.dp)) {
     T(title, 16.sp, weight = FontWeight.Medium); Gap(6.dp); T(body, 14.sp, C.Sub, lh = 20.sp)
+}
+
+/** The question's short video, looping and muted (its poster while Home Assistant signs the address). */
+@Composable
+private fun LearnClip(photo: io.github.gccammelli.liberpet.LearnPhoto, folder: String) {
+    var url by remember(photo.id) { mutableStateOf<String?>(null) }
+    var failed by remember(photo.id) { mutableStateOf(false) }
+    LaunchedEffect(photo.id) {
+        photo.video?.let { v -> url = runCatching { Repo.ha!!.resolveMedia("media-source://media_source/local/$folder/$v") }.getOrNull() }
+    }
+    val u = url
+    if (u != null && !failed) VideoPlayer(u, muted = true, modifier = Modifier.fillMaxSize(), onError = { failed = true }, loop = true)
+    else {
+        val img = rememberHaImage("/media/local/$folder/${photo.path}", 900)
+        if (img != null) Image(img, "The ${photo.side} bowl", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        else CircularProgressIndicator(color = Color.White)
+    }
 }

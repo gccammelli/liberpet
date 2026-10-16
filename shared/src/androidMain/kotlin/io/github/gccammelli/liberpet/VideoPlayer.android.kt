@@ -48,7 +48,7 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 
 @OptIn(UnstableApi::class)
 @Composable
-actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError: (String) -> Unit, controls: Boolean) {
+actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError: (String) -> Unit, controls: Boolean, loop: Boolean) {
     val ctx = LocalContext.current
     val player = remember(url) {
         ExoPlayer.Builder(ctx).setMediaSourceFactory(DefaultMediaSourceFactory(ctx).setLoadErrorHandlingPolicy(RetryEarlyParts)).build().apply {
@@ -56,6 +56,7 @@ actual fun VideoPlayer(url: String, muted: Boolean, modifier: Modifier, onError:
                 // Stay close to the live edge (Home Assistant serves low-latency HLS).
                 .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(2_500).build()).build())
             playWhenReady = true
+            if (loop) repeatMode = Player.REPEAT_MODE_ONE
             prepare()
         }
     }

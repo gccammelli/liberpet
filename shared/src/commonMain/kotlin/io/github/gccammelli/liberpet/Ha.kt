@@ -319,8 +319,11 @@ const val CATS_SENSOR = "sensor.liberpet_cats"
 const val LABEL_ENTITY = "input_text.liberpet_label"
 const val NO_CAT = "none"
 
-/** A bowl picture to label: [path] inside the recordings folder, [side] "left"/"right", [guess] a pet id or null. */
-data class LearnPhoto(val id: String, val path: String, val side: String, val guess: String?)
+/**
+ * Something to label: a stretch of one clip with one cat at one bowl. [video] (a short loop, other bowl dimmed) and
+ * [path] (its poster) are inside the recordings folder; [side] "left"/"right"; [guess] a pet id or null.
+ */
+data class LearnPhoto(val id: String, val path: String, val side: String, val guess: String?, val video: String? = null)
 
 /**
  * The recognizer's state: "waiting" (no clips yet), "learning" or "ready"; [labels] per pet id (and [NO_CAT]),
@@ -339,7 +342,7 @@ fun parseCats(text: String): Cats {
         labels = obj("labels").mapValues { (it.value as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0 },
         toLabel = (a["to_label"] as? JsonArray ?: JsonArray(emptyList())).mapNotNull { e ->
             val x = e.jsonObject
-            LearnPhoto(x.s("id") ?: return@mapNotNull null, x.s("path") ?: return@mapNotNull null, x.s("side") ?: "left", x.s("guess"))
+            LearnPhoto(x.s("id") ?: return@mapNotNull null, x.s("path") ?: return@mapNotNull null, x.s("side") ?: "left", x.s("guess"), x.s("video"))
         },
         clips = obj("clips").mapValues { (_, v) -> (v as? JsonObject ?: JsonObject(emptyMap())).mapNotNull { (k, x) -> (x as? JsonPrimitive)?.contentOrNull?.let { k to it } }.toMap() },
     )
