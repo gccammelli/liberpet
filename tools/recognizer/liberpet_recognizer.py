@@ -170,9 +170,13 @@ class Brain:
         score = {sid: float(np.mean([sure[p] for p in g["pids"]])) for sid, g in open_.items()}
         order = sorted(open_, key=lambda sid: (round(score[sid], 2), -len(open_[sid]["pids"])))
         by_side = {"left": [x for x in order if open_[x]["side"] == "left"], "right": [x for x in order if open_[x]["side"] == "right"]}
+        # Start with the bowl with fewer answers so far: LiberPet shows the first question, then asks again.
+        done = {side: len({self.meta[p].get("seg", p) for p in self.labels if p in self.meta and self.meta[p]["side"] == side})
+                for side in ("left", "right")}
+        sides = ("right", "left") if done["right"] < done["left"] else ("left", "right")
         out = []
         while len(out) < n and (by_side["left"] or by_side["right"]):
-            for side in ("left", "right"):
+            for side in sides:
                 if by_side[side] and len(out) < n:
                     sid = by_side[side].pop(0); out.append((sid, open_[sid]))
         return out

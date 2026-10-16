@@ -45,11 +45,16 @@ print("swap clip segments:", swap)
 assert len(swap) == 2 and swap[0][1] < swap[1][0], swap  # split where the cat changed
 assert all(len({truth[p] for p in g["pids"]}) == 1 for g in segs.values())  # every segment is one cat
 
-# Labelling: the user answers whatever segment it asks about, a few rounds, as LiberPet would.
-asked = 0
-for _ in range(4):
-    for sid, g in b.segments_to_label(4, b.segments()):
-        b.label_segment(sid, g, truth[g["pids"][0]]); asked += 1
+# Labelling as LiberPet does it: answer the first question, ask again. Both bowls must come up in turn.
+asked, sides = 0, []
+for _ in range(16):
+    q = b.segments_to_label(4, b.segments())
+    if not q:
+        break
+    sid, g = q[0]
+    b.label_segment(sid, g, truth[g["pids"][0]]); asked += 1; sides.append(g["side"])
+print("bowls asked:", "".join(x[0] for x in sides))
+assert abs(sides.count("left") - sides.count("right")) <= 1, sides
 acc, counts = b.accuracy()
 print(f"{asked} questions, segments per cat {counts}, accuracy {acc:.2f}")
 assert acc >= 0.9 and set(counts) == {"pet-a", "pet-b"}
