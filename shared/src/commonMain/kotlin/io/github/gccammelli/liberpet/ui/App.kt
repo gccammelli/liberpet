@@ -161,7 +161,7 @@ private fun Device.plansById(id: Long?) = id?.let { i -> plans.firstOrNull { it.
 @Composable
 fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
     // Care only when switched on in Settings; Nav.tab is a position in this list.
-    val care = Repo.showCare.collectAsState().value
+    val care = io.github.gccammelli.liberpet.Feature.CARE_TAB.on()
     val tabs = listOfNotNull(
         Triple("Device", Icons.Default.Smartphone) @Composable { HomeTab(st) },
         if (care) Triple("Care", Icons.Default.Pets) @Composable { CareTab(st) } else null,

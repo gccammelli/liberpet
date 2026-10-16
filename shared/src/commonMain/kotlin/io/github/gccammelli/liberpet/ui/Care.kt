@@ -104,7 +104,7 @@ fun CareTab(st: UiState) {
             Gap(22.dp)
             val feeders = st.home?.devices.orEmpty().filter { it.isFeeder && it.serial in pet.linkedSerials }
             val fountains = st.home?.devices.orEmpty().filter { it.isFountain && it.serial in pet.linkedSerials }
-            val stats = daily.takeIf { Repo.betaInsights.collectAsState().value }
+            val stats = daily.takeIf { io.github.gccammelli.liberpet.Feature.CAT_INSIGHTS.on() }
             if (stats != null && feeders.isNotEmpty()) { CatInsights(pet, stats); Gap(22.dp) }
             T("Overview", 18.sp, weight = FontWeight.Medium)
             Gap(12.dp)
@@ -269,17 +269,19 @@ fun MeTab(st: UiState) {
 fun SettingsScreen() = BigTitlePage("Settings", { Nav.back() }) {
     Gap(12.dp)
     NavRow("Refresh", chevron = false) { Repo.refresh() }
+    // Optional parts of LiberPet, from the registry (Feature); all off until switched on.
+    io.github.gccammelli.liberpet.Feature.entries.groupBy { it.group }.forEach { (group, features) ->
+        Gap(24.dp)
+        T(group.uppercase(), 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
+        Gap(8.dp)
+        features.forEach { f ->
+            ToggleRow(f.title, f.on()) { on ->
+                Repo.setFeature(f, on)
+                if (f == io.github.gccammelli.liberpet.Feature.CARE_TAB) Nav.tab = if (on) 2 else 1 // stay on Me, whose position just moved
+            }
+            T(f.about + (f.needs?.let { " Needs: $it." } ?: ""), 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+        }
+    }
     Gap(24.dp)
-    T("TABS", 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
-    Gap(8.dp)
-    ToggleRow("Care", Repo.showCare.collectAsState().value) { Repo.setBeta("show_care", it); Nav.tab = if (it) 2 else 1 } // stay on Me, whose position just moved
-    Gap(24.dp)
-    T("BETA FEATURES", 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
-    Gap(8.dp)
-    ToggleRow("Cat Recognition", Repo.betaRecognition.collectAsState().value) { Repo.setBeta("beta_recognition", it) }
-    ToggleRow("Cat Insights", Repo.betaInsights.collectAsState().value) { Repo.setBeta("beta_insights", it) }
-    T("Need LiberPet's recorder and recognizer on your home server (see tools/recognizer). Cat Recognition teaches it your " +
-        "cats on the feeder page; Cat Insights shows each cat's visits in Care (switch the Care tab on too).", 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(16.dp))
-    Gap(12.dp)
     NavRow("Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
 }

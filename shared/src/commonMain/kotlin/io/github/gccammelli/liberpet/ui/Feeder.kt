@@ -116,7 +116,7 @@ fun FeederScreen(d: Device, st: UiState) {
                 Gap(16.dp)
                 PetsLinked(d, st)
                 Gap(12.dp)
-                if (Repo.betaRecognition.collectAsState().value) CatsCard(d)
+                if (io.github.gccammelli.liberpet.Feature.CAT_RECOGNITION.on()) CatsCard(d)
                 Card(padding = PaddingValues(vertical = 22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BigStat(fmt(d.num("today_feeding_quantity_weight") ?: 0.0), "g", "Today's Feeding Amount", Modifier.weight(1f))
@@ -174,7 +174,8 @@ fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().backgrou
         // Record and snapshot go through Home Assistant too; no mic: the camera's open-source stream has no talk-back.
         val ctx = LocalPlatform.current; val scope = androidx.compose.runtime.rememberCoroutineScope()
         val camOn = if (cam != null) C.Text else C.Track
-        Icon(Icons.Outlined.Videocam, "Record a clip", Modifier.size(30.dp).clickable(enabled = cam != null) {
+        val recordings = io.github.gccammelli.liberpet.Feature.RECORDINGS.on()
+        if (recordings) Icon(Icons.Outlined.Videocam, "Record a clip", Modifier.size(30.dp).clickable(enabled = cam != null) {
             scope.launch {
                 runCatching { Repo.ha!!.recordClip() }.fold(
                     { ok -> ctx.toast(if (ok) "Recording: the last 10 s and the next 30 s will be in Recordings in a minute" else "To record, add a Home Assistant button named \"LiberPet record\" (see the recorder's guide)") },
@@ -189,7 +190,7 @@ fun CameraCard(d: Device, st: UiState) = Column(Modifier.fillMaxWidth().backgrou
             }
         }, tint = camOn)
         // Playback and gallery: the recorder's clips through Home Assistant.
-        listOf(Icons.Outlined.PlayCircle to "Recordings", Icons.Outlined.Image to "Gallery").forEach { (icon, label) ->
+        if (recordings) listOf(Icons.Outlined.PlayCircle to "Recordings", Icons.Outlined.Image to "Gallery").forEach { (icon, label) ->
             Icon(icon, label, Modifier.size(30.dp).clickable { Nav.go(Screen.Gallery(d.serial)) }, tint = C.Text)
         }
     }
