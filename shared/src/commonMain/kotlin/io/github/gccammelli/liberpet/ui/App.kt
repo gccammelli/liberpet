@@ -1,5 +1,6 @@
 package io.github.gccammelli.liberpet.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -183,20 +184,16 @@ fun HomeTab(st: UiState) {
     val home = st.home ?: return
     Column(Modifier.fillMaxSize().background(C.HomeBg).verticalScroll(rememberScrollState())) {
         var editHeader by remember { mutableStateOf(false) }
-        Box(Modifier.fillMaxWidth().height(300.dp)) {
+        // Long-press the picture to change it.
+        Box(Modifier.fillMaxWidth().height(300.dp).pointerInput(Unit) { detectTapGestures(onLongPress = { editHeader = true }) }) {
             val bytes by Repo.header.collectAsState()
             val photo = remember(bytes) { bytes?.let { decodeImage(it, 1600) } }
             if (photo != null) Image(photo, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             else HeaderArt(Modifier.matchParentSize())
-            // Keeps "All" and the buttons readable on any picture.
+            // Keeps the buttons readable on any picture.
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0x33000000), Color.Transparent, Color.Transparent, Color(0x55000000)))))
             Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 10.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HeaderCircle(if (st.loading) Icons.Default.Refresh else Icons.Outlined.NotificationsNone) { Repo.refresh() }
-                HeaderCircle(Icons.Outlined.Image) { editHeader = true }
-            }
-            Row(Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                T("All", 28.sp, Color.White, FontWeight.Bold)
-                Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White)
             }
         }
         if (editHeader) {

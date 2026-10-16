@@ -72,7 +72,7 @@ Tested with a Granary Smart Camera Feeder (PLAF203) and Dockstream Smart Fountai
 ## Extras
 
 - **Device order:** long-press a device card on Home and drag it to rearrange.
-- **Home picture:** tap the picture button on Home to use your own photo. It stays on the phone.
+- **Home picture:** long-press the picture on Home to use your own photo. It stays on the phone.
 - **Appearance:** Me → Appearance switches between System, Light and Dark.
 
 ## iPhone (beta)
