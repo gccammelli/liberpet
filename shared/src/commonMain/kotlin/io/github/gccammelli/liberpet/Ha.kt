@@ -16,6 +16,7 @@ import io.ktor.http.contentType
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -356,4 +357,42 @@ suspend fun HaBackend.label(photo: String, pet: String): Boolean {
     try { get("/api/states/$LABEL_ENTITY") } catch (e: ApiException) { return false }
     post("/api/services/input_text/set_value", buildJsonObject { put("entity_id", LABEL_ENTITY); put("value", "$photo=$pet") }.toString())
     return true
+}
+
+// ---------- Cat insights (GitHub #3): what the recognizer saw, as statistics per cat ----------
+
+const val STATS_SENSOR = "sensor.liberpet_cat_stats"
+
+/** One cat on one day: visits, seconds eating ([leftSeconds] at the left bowl), visits per hour, last visit "HH:MM:SS". */
+data class CatDay(val visits: Int, val seconds: Int, val leftSeconds: Int, val byHour: List<Int>, val last: String)
+
+/** The recognizer's daily statistics: day "YYYY-MM-DD" → pet id → [CatDay]. */
+fun parseCatDays(text: String): Map<String, Map<String, CatDay>> {
+    val days = json.parseToJsonElement(text).jsonObject.o("attributes")?.o("days") ?: return emptyMap()
+    return days.mapValues { (_, pets) ->
+        (pets as? JsonObject ?: JsonObject(emptyMap())).mapValues { (_, v) ->
+            val o = v.jsonObject
+            CatDay(o.s("v")?.toIntOrNull() ?: 0, o.s("s")?.toIntOrNull() ?: 0, o.s("l")?.toIntOrNull() ?: 0,
+                (o["h"] as? JsonArray)?.map { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0 } ?: List(24) { 0 }, o.s("last") ?: "")
+        }
+    }
+}
+
+/** The daily statistics, or null if the recognizer isn't running. */
+suspend fun HaBackend.catDays(): Map<String, Map<String, CatDay>>? = try { parseCatDays(get("/api/states/$STATS_SENSOR")) } catch (e: ApiException) { null }
+
+/** One cat's statistics over some days: visits, seconds eating, typical visit, bowl split, visits by hour, last visit. */
+data class CatStats(val visits: Int, val seconds: Int, val leftSeconds: Int, val byHour: List<Int>, val last: String?) {
+    val typicalSeconds get() = if (visits == 0) 0 else seconds / visits
+    val leftShare get() = if (seconds == 0) 0.0 else leftSeconds.toDouble() / seconds
+}
+
+/** [days] days ending [today] ("YYYY-MM-DD"); [CatStats.last] is "YYYY-MM-DDTHH:MM:SS". */
+fun catStats(daily: Map<String, Map<String, CatDay>>, pet: String, today: String, days: Int): CatStats {
+    val first = kotlinx.datetime.LocalDate.parse(today).minus(kotlinx.datetime.DatePeriod(days = days - 1)).toString()
+    val mine = daily.filterKeys { it in first..today }.mapNotNull { (day, pets) -> pets[pet]?.let { day to it } }
+    val hours = MutableList(24) { 0 }
+    mine.forEach { (_, d) -> d.byHour.forEachIndexed { h, n -> if (h < 24) hours[h] += n } }
+    return CatStats(mine.sumOf { it.second.visits }, mine.sumOf { it.second.seconds }, mine.sumOf { it.second.leftSeconds }, hours,
+        mine.filter { it.second.last.isNotEmpty() }.maxOfOrNull { (day, d) -> "${day}T${d.last}" })
 }

@@ -143,4 +143,21 @@ class HaTest {
         assertEquals(LearnPhoto("d_c_r014", "_learn/d_c_r014.jpg", "right", null), c.toLabel.single())
         assertEquals("petlibro-key-2", c.clips["2026-10-15/09-00-11_motion_151s"]?.get("right"))
     }
+
+    @Test
+    fun catStatsSumTheRightDaysAndCats() {
+        fun hours(vararg h: Int) = List(24) { if (it in h) 1 else 0 }.joinToString(",")
+        val h8 = hours(8); val h20 = hours(20); val h8and20 = hours(8, 20)
+        val daily = parseCatDays("""{"state":"x","attributes":{"days":{
+            "2026-10-16":{"a":{"v":2,"s":180,"l":60,"h":[$h8and20],"last":"20:30:00"},"b":{"v":1,"s":90,"l":90,"h":[$h20],"last":"20:31:00"}},
+            "2026-10-15":{"a":{"v":1,"s":30,"l":30,"h":[$h8],"last":"07:00:00"}},
+            "2026-10-01":{"a":{"v":1,"s":45,"l":45,"h":[$h8],"last":"09:00:00"}}}}}""")
+        val today = catStats(daily, "a", "2026-10-16", 1)
+        assertEquals(2, today.visits); assertEquals(180, today.seconds); assertEquals(90, today.typicalSeconds)
+        assertEquals(1.0 / 3, today.leftShare, 1e-9); assertEquals("2026-10-16T20:30:00", today.last)
+        assertEquals(1, today.byHour[8]); assertEquals(1, today.byHour[20])
+        assertEquals(3, catStats(daily, "a", "2026-10-16", 7).visits) // the 15th too, not the 1st
+        assertEquals(4, catStats(daily, "a", "2026-10-16", 30).visits)
+        assertEquals(1, catStats(daily, "b", "2026-10-16", 7).visits)
+    }
 }

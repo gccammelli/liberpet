@@ -9,6 +9,8 @@ LiberPet, it only talks to Home Assistant:
 
 - **Its results** go to the entity `sensor.liberpet_cats`: state `waiting`, `learning` or `ready`, plus the photos to
   label and who it saw at each bowl in each clip. LiberPet reads it.
+- **Daily statistics per cat** (visits, time eating, bowl, hours) go to `sensor.liberpet_cat_stats`, for LiberPet's Cat
+  Insights page.
 - **Your answers** come back through a Home Assistant text helper, `input_text.liberpet_label`, which LiberPet sets.
 - **The clips to label** are saved in the clips folder under `_learn/`, so Home Assistant's media browser serves
   them like the recordings.

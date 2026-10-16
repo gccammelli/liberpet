@@ -20,7 +20,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +33,7 @@ DEFAULTS = {
     "ha_token_file": None,           # needs to be allowed to set states (an administrator's token)
     "label_entity": "input_text.liberpet_label",
     "sensor": "sensor.liberpet_cats",
+    "stats_sensor": "sensor.liberpet_cat_stats",  # daily statistics per cat, for LiberPet's insights
     "split": [0.36, 0.44],           # the feeder's post: left bowl ends, right bowl starts (fraction of the width)
     "every_s": 1,                    # one frame every N seconds of clip
     "cat_score": 0.02,               # CLIP "cat" minus "empty bowl" similarity a picture needs to count
@@ -270,7 +271,8 @@ class Recognizer:
     # ---- clips ----
 
     def new_clips(self):
-        for mp4 in sorted(self.out.glob("*/*.mp4")):
+        # Recordings only: day folders (YYYY-MM-DD), never this recognizer's own _learn videos.
+        for mp4 in sorted(self.out.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/*.mp4")):
             rel = f"{mp4.parent.name}/{mp4.stem}"
             if rel not in self.done and not mp4.name.startswith(".") and time.time() - mp4.stat().st_mtime > 10:
                 yield rel, mp4
@@ -367,12 +369,47 @@ class Recognizer:
         return False
 
     def guess(self, seg):
+        return self.who(seg)[0]
+
+    def who(self, seg):
+        """The cat of a stay and how sure (0..1): your answer if you gave one, else a vote over its pictures."""
+        given = {self.brain.labels[p] for p in seg["pids"] if p in self.brain.labels}
+        if len(given) == 1:
+            return given.pop(), 1.0
         votes = {}
-        for p in seg["pids"][:: max(1, len(seg["pids"]) // 5)]:
+        for p in seg["pids"][:: max(1, len(seg["pids"]) // 8)]:
             g, c = self.brain.predict(p)
             if g:
                 votes[g] = votes.get(g, 0) + c
-        return max(votes, key=votes.get) if votes else None
+        if not votes:
+            return None, 0.0
+        best = max(votes, key=votes.get)
+        return best, votes[best] / sum(votes.values())
+
+    def daily_stats(self, days=30, min_sure=0.6):
+        """
+        Per day and cat, for LiberPet's insights: {"YYYY-MM-DD": {pet: {v: visits, s: seconds, l: seconds at the left bowl,
+        h: visits per hour (24), last: "HH:MM:SS"}}}. Local (recorder) time; stays it's less than [min_sure] sure about
+        don't count. Small enough for a Home Assistant entity (Home Assistant's media folders won't serve a JSON file).
+        """
+        out = {}
+        oldest = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        for seg in self.segs.values():
+            day, name = seg["clip"].split("/", 1)
+            if day < oldest:
+                continue
+            try:
+                start = datetime.strptime(f"{day} {name[:8]}", "%Y-%m-%d %H-%M-%S") + timedelta(seconds=seg["t0"])
+            except ValueError:
+                continue
+            pet, sure = self.who(seg)
+            if not pet or pet == NONE or sure < min_sure:
+                continue
+            secs = seg["t1"] - seg["t0"] + 1
+            d = out.setdefault(start.strftime("%Y-%m-%d"), {}).setdefault(pet, {"v": 0, "s": 0, "l": 0, "h": [0] * 24, "last": ""})
+            d["v"] += 1; d["s"] += secs; d["l"] += secs if seg["side"] == "left" else 0; d["h"][start.hour] += 1
+            d["last"] = max(d["last"], start.strftime("%H:%M:%S"))
+        return out
 
     def publish(self):
         acc, counts = self.brain.accuracy()
@@ -402,11 +439,25 @@ class Recognizer:
         }
         state = "ready" if ready else ("learning" if self.brain.ids else "waiting")
         try:
+            self.ha("POST", f"/api/states/{self.cfg['stats_sensor']}", {"state": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                    "attributes": {"friendly_name": "LiberPet cat statistics", "days": self.daily_stats()}})
+        except Exception as e:
+            log("couldn't publish statistics:", e)
+        try:
             self.ha("POST", f"/api/states/{self.cfg['sensor']}", {"state": state, "attributes": attrs})
         except Exception as e:
             log("publish failed:", e)
 
     def run(self):
+        # Pictures taken from its own labelling videos (an earlier bug read _learn/ as recordings): not real visits.
+        learn = [p for p in self.brain.ids if not self.brain.meta[p]["clip"][:1].isdigit()]
+        if learn:
+            for p in learn:
+                self.brain.labels.pop(p, None)
+            drop = set(learn)
+            self.brain.keep(lambda p: p not in drop)
+            self.done = {c for c in self.done if c[:1].isdigit()}
+            log("dropped", len(learn), "pictures of labelling videos")
         log("starting:", len(self.brain.ids), "pictures,", len(self.brain.labels), "labels")
         self.segs = self.brain.segments()
         # Earlier answers (single pictures, or shorter pieces) label the whole stay they fall in, if they agree.

@@ -85,6 +85,18 @@ fun CatsCard(d: Device) {
         }
     }
     Gap(12.dp)
+    if (c.labels.isNotEmpty()) {
+        Card(padding = PaddingValues(horizontal = 24.dp, vertical = 18.dp), onClick = { Nav.go(Screen.CatInsights(d.serial)) }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    T("Cat Insights", 18.sp, weight = FontWeight.Medium); Gap(4.dp)
+                    T("Visits, time eating and favourite bowl, per cat", 13.sp, C.Sub)
+                }
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(24.dp), tint = C.Faint)
+            }
+        }
+        Gap(12.dp)
+    }
 }
 
 /**
