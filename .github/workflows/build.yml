@@ -1,10 +1,12 @@
-# Builds the Android APK and an unsigned iOS .ipa. Runs only by hand (Actions → Build → Run workflow) or on a "v*"
-# tag, which also attaches both to a GitHub Release: macOS minutes are expensive on a private repository.
+# Tests on every push to main. A "v*" tag builds the release APK (signed with the release key from the repository's
+# secrets) and an unsigned iOS .ipa, and attaches both to a GitHub Release; Actions → Build → Run workflow builds a
+# debug APK for testing.
 name: Build
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
@@ -24,26 +26,48 @@ jobs:
       - name: Test
         run: ./gradlew testDebugUnitTest
 
-      # Debug-signed, so it installs without a release key.
-      - name: Build APK
+      # Run by hand: debug-signed, so it installs without the release key.
+      - name: Build debug APK
+        if: github.event_name == 'workflow_dispatch'
         run: |
           ./gradlew assembleDebug
           cp app/build/outputs/apk/debug/app-debug.apk liberpet.apk
 
+      # Tags: the release APK, signed with the release key (secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS,
+      # KEY_PASSWORD). A fixed-name copy too, so releases/latest/download/liberpet.apk always links the newest.
+      - name: Build release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          LIBERPET_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LIBERPET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          LIBERPET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          [ -n "$KEYSTORE_BASE64" ] || { echo "::error::Add the release key secrets (see README, Building)"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          LIBERPET_KEYSTORE="$RUNNER_TEMP/release.jks" ./gradlew assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "liberpet-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk liberpet.apk
+
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         with:
           name: apk
-          path: liberpet.apk
+          path: liberpet*.apk
 
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: liberpet.apk
+          files: |
+            liberpet-${{ github.ref_name }}.apk
+            liberpet.apk
           generate_release_notes: true
 
   # Unsigned .ipa: sign it with your own Apple ID via SideStore or AltStore. Plus one simulator screenshot of the
   # first screen, to check the app starts.
   ios:
+    # Releases and manual runs only: a pushed commit doesn't need a new .ipa.
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
