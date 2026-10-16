@@ -36,6 +36,8 @@ object Repo {
         if (::store.isInitialized) return
         store = s
         io.github.gccammelli.liberpet.ui.ThemeMode.mode = s.settings.getString("theme") ?: "system"
+        betaRecognition.value = s.settings.getString("beta_recognition") == "true"
+        betaInsights.value = s.settings.getString("beta_insights") == "true"
         header.value = s.files.read(HEADER)
         val url = s.settings.getString("ha_url")
         val token = s.secrets.get("ha_token")
@@ -92,6 +94,14 @@ object Repo {
 
     /** null: automatic; "": none; else a camera entity id. */
     fun setCamera(d: Device, id: String?) = store.settings.putString("camera.${d.serial}", id)
+
+    /** Beta features (GitHub #5), off until switched on in Settings: the feeder's Cat Recognition card, and Cat Insights in Care. */
+    val betaRecognition = MutableStateFlow(false)
+    val betaInsights = MutableStateFlow(false)
+    fun setBeta(key: String, on: Boolean) {
+        (if (key == "beta_recognition") betaRecognition else betaInsights).value = on
+        store.settings.putString(key, on.toString())
+    }
 
     fun setTheme(mode: String) { io.github.gccammelli.liberpet.ui.ThemeMode.mode = mode; store.settings.putString("theme", mode) }
 

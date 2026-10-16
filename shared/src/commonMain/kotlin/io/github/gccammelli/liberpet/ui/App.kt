@@ -163,12 +163,11 @@ fun Tabs(st: UiState) = Column(Modifier.fillMaxSize().background(C.Bg)) {
         when (Nav.tab) {
             0 -> HomeTab(st)
             1 -> CareTab(st)
-            2 -> ServicesTab()
             else -> MeTab(st)
         }
     }
     Row(Modifier.fillMaxWidth().background(C.Nav).navigationBarsPadding().height(64.dp)) {
-        listOf("Device" to Icons.Default.Smartphone, "Care" to Icons.Default.Pets, "Services" to Icons.Default.ShoppingBag, "Me" to Icons.Default.Person)
+        listOf("Device" to Icons.Default.Smartphone, "Care" to Icons.Default.Pets, "Me" to Icons.Default.Person)
             .forEachIndexed { i, (label, icon) ->
                 val sel = Nav.tab == i
                 Column(Modifier.weight(1f).fillMaxSize().clickable { Nav.tab = i }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -325,16 +324,6 @@ fun StatusIcons(d: Device) = Row(horizontalArrangement = Arrangement.spacedBy(8.
         SmallIcon(Icons.Outlined.FilterAlt, if ((d.num("remaining_filter_days") ?: 1.0) <= 0) Orange else C.Faint, 18.dp)
         SmallIcon(Icons.Outlined.CleaningServices, if ((d.num("remaining_cleaning_days") ?: 1.0) <= 0) Orange else C.Faint, 18.dp)
     } else if (d.e["light_switch"]?.on == false) SmallIcon(Icons.Outlined.VolumeOff, C.Faint, 18.dp)
-}
-
-@Composable
-fun ServicesTab() = Column(Modifier.fillMaxSize().background(C.Card).statusBarsPadding()) {
-    Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) { T("SERVICES", 17.sp, weight = FontWeight.Medium) }
-    Column(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.Bg).padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.ShoppingBag, null, Modifier.size(32.dp), tint = C.Dark)
-        Gap(16.dp)
-        T("Service coming soon...", 20.sp)
-    }
 }
 
 // ---------- Connect ----------

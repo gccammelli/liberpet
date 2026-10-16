@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,7 +104,7 @@ fun CareTab(st: UiState) {
             Gap(22.dp)
             val feeders = st.home?.devices.orEmpty().filter { it.isFeeder && it.serial in pet.linkedSerials }
             val fountains = st.home?.devices.orEmpty().filter { it.isFountain && it.serial in pet.linkedSerials }
-            val stats = daily
+            val stats = daily.takeIf { Repo.betaInsights.collectAsState().value }
             if (stats != null && feeders.isNotEmpty()) { CatInsights(pet, stats); Gap(22.dp) }
             T("Overview", 18.sp, weight = FontWeight.Medium)
             Gap(12.dp)
@@ -119,7 +120,7 @@ fun CareTab(st: UiState) {
                 Row(verticalAlignment = Alignment.Bottom) { T(fmt(pet.num("weight") ?: 0.0), 30.sp, weight = FontWeight.Medium); T(" kg", 15.sp, modifier = Modifier.padding(bottom = 4.dp)) }
             }
             Gap(24.dp)
-            T(if (daily != null) "Water is the total of the fountains linked to ${pet.name}; Petlibro only splits it per pet with RFID collars."
+            T(if (stats != null) "Water is the total of the fountains linked to ${pet.name}; Petlibro only splits it per pet with RFID collars."
               else "Food and water are the totals of the devices linked to ${pet.name}; Petlibro only splits them per pet with RFID collars.", 12.sp, C.Faint, lh = 17.sp)
             Gap(24.dp)
             val ts = trend
@@ -268,6 +269,13 @@ fun MeTab(st: UiState) {
 fun SettingsScreen() = BigTitlePage("Settings", { Nav.back() }) {
     Gap(12.dp)
     NavRow("Refresh", chevron = false) { Repo.refresh() }
+    Gap(24.dp)
+    T("BETA FEATURES", 13.sp, C.Sub, modifier = Modifier.padding(horizontal = 16.dp))
+    Gap(8.dp)
+    ToggleRow("Cat Recognition", Repo.betaRecognition.collectAsState().value) { Repo.setBeta("beta_recognition", it) }
+    ToggleRow("Cat Insights", Repo.betaInsights.collectAsState().value) { Repo.setBeta("beta_insights", it) }
+    T("Need LiberPet's recorder and recognizer on your home server (see tools/recognizer). Cat Recognition teaches it your " +
+        "cats on the feeder page; Cat Insights shows each cat's visits in Care.", 12.sp, C.Faint, lh = 16.sp, modifier = Modifier.padding(16.dp))
     Gap(12.dp)
     NavRow("Log Out", labelColor = C.Red) { Repo.logout(); Nav.stack.clear(); Nav.tab = 0 }
 }

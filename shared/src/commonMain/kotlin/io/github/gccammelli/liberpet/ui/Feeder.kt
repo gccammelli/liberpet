@@ -58,6 +58,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -115,7 +116,7 @@ fun FeederScreen(d: Device, st: UiState) {
                 Gap(16.dp)
                 PetsLinked(d, st)
                 Gap(12.dp)
-                CatsCard(d)
+                if (Repo.betaRecognition.collectAsState().value) CatsCard(d)
                 Card(padding = PaddingValues(vertical = 22.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BigStat(fmt(d.num("today_feeding_quantity_weight") ?: 0.0), "g", "Today's Feeding Amount", Modifier.weight(1f))
