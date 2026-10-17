@@ -1,0 +1,38 @@
+name: Support another PETLIBRO device
+description: Help LiberPet work with a feeder, fountain or other PETLIBRO device it doesn't show yet
+title: "Device support: <model>"
+labels: [new device]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! LiberPet shows what the community [PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) gives Home Assistant, so the device must work there first.
+        **Before attaching anything, remove serial numbers, emails, Wi-Fi names, IP addresses and tokens.**
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: The model code on the device or in Home Assistant (Settings › Devices & services › PETLIBRO › your device), e.g. PLAF203
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is it?
+      options: [Feeder, Water fountain, Litter box, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: entities
+    attributes:
+      label: Its entities in Home Assistant
+      description: |
+        The device page's list of sensors, switches, buttons and so on, with their current values (a screenshot works).
+        Or its diagnostics: the device page › ⋮ › Download diagnostics (check it for personal data first).
+    validations:
+      required: true
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What you'd like to see in LiberPet
+      description: Which screens or controls from the official app matter most for this device?

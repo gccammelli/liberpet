@@ -1,5 +1,7 @@
 # LiberPet
 
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cammelli)
+
 An open-source app for PETLIBRO feeders and water fountains, through **your own Home Assistant**. Its screens follow
 the official Petlibro app's layout, so it feels familiar.
 
@@ -92,6 +94,23 @@ Home Assistant.
   LiberPet builds logs from Home Assistant's history, so times can lag by up to a few minutes.
 - **Per-pet food and water:** Care shows the totals of each pet's linked devices, unless Cat Insights is on.
   Petlibro only splits them per pet with RFID models.
+
+## Other PETLIBRO devices
+
+LiberPet shows feeders (models starting PLAF) and water fountains (PLWF); other PETLIBRO devices are skipped for now.
+A model in those families mostly works, minus anything its entities name differently.
+
+Have a device that's missing or half-working? [Open a device request](https://github.com/gccammelli/liberpet/issues/new?template=new-device.yml)
+with its model and the entities Home Assistant shows for it. That's usually enough to add it. Pull requests are welcome
+too: device screens live in `shared/src/commonMain/kotlin/io/github/gccammelli/liberpet/ui/`.
+
+## Support the project
+
+LiberPet is free and always will be. Donations pay for test devices, so more PETLIBRO models can be supported:
+[Buy me a coffee](https://buymeacoffee.com/cammelli) (also in the app, under **Me**).
+
+Bugs and questions: [GitHub issues](https://github.com/gccammelli/liberpet/issues), or **Me › Help, bugs and new
+devices** in the app.
 
 ## Privacy
 

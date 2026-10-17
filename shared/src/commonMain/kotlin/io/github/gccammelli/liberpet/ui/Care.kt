@@ -26,10 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LocalCafe
 import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Extension
@@ -265,6 +267,12 @@ fun MeTab(st: UiState) {
             modes.forEach { (k, label) -> Radio(ThemeMode.mode == k, label) { Repo.setTheme(k); pick = false } }
             Gap(24.dp)
         }
+        Gap(12.dp)
+        NavRow("Help, bugs and new devices", leading = { SmallIcon(Icons.Outlined.BugReport, C.Text, 22.dp) }) {
+            p.openUrl("${io.github.gccammelli.liberpet.REPO_URL}/issues")
+        }
+        Gap(12.dp)
+        NavRow("Buy me a coffee", leading = { SmallIcon(Icons.Outlined.LocalCafe, C.Text, 22.dp) }) { p.openUrl(io.github.gccammelli.liberpet.DONATE_URL) }
         Gap(12.dp)
         NavRow("About", "V${p.appVersion}", leading = { SmallIcon(Icons.Outlined.Info, C.Text, 22.dp) }, chevron = false)
     }

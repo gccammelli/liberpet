@@ -36,6 +36,7 @@ import kotlinx.serialization.json.put
 
 const val INTEGRATION_URL = "https://github.com/jjjonesjr33/petlibro"
 const val REPO_URL = "https://github.com/gccammelli/liberpet"
+const val DONATE_URL = "https://buymeacoffee.com/cammelli"
 /** A setup guide in LiberPet's repository ("docs/camera.md"). */
 fun guide(path: String) = "$REPO_URL/blob/main/$path"
 
