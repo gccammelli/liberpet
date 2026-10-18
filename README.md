@@ -1,7 +1,5 @@
 # LiberPet
 
-[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cammelli)
-
 An open-source app for PETLIBRO feeders and water fountains, through **your own Home Assistant**. Its screens follow
 the official Petlibro app's layout, so it feels familiar.
 
@@ -143,3 +141,5 @@ signature. Pushing a `v*` tag builds and publishes the signed APK (and the `.ipa
 LiberPet is an unofficial app, not affiliated with or endorsed by PETLIBRO. PETLIBRO, Granary and Dockstream are
 trademarks of their owner. It uses none of Petlibro's code or assets: the device pictures are simple drawings, and the
 demo pets' photos are AI-generated. Provided as is, without warranty.
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cammelli)
