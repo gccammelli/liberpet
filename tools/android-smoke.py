@@ -90,8 +90,12 @@ def main():
         # A freshly launched Compose activity can expose its accessibility tree
         # just before it is ready to consume the first synthetic tap.
         for _ in range(3):
-            tap(label, scroll=label_scroll)
             try:
+                return find(next_label, scroll=next_scroll, attempts=1)
+            except AssertionError:
+                pass
+            try:
+                tap(label, scroll=label_scroll)
                 return find(next_label, scroll=next_scroll, attempts=4)
             except AssertionError:
                 pass
@@ -102,7 +106,7 @@ def main():
 
     try:
         tap_until_visible("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.",
-                          "Granary Camera Feeder", label_scroll=True)
+                          "Granary Camera Feeder", next_scroll=True, label_scroll=True)
         find("Dockstream Smart Fountain")
         capture("devices")
 
