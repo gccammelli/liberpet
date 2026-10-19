@@ -52,6 +52,7 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
+          profile: Nexus 6
           disable-animations: true
           script: bash tools/android-smoke.sh app/build/outputs/apk/debug/app-debug.apk
 
