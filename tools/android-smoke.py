@@ -86,11 +86,11 @@ def main():
         run(*adb, "shell", "input", "tap", str((x1+x2)//2), str((y1+y2)//2))
         time.sleep(0.5)
 
-    def tap_until_visible(label, next_label, next_scroll=False):
+    def tap_until_visible(label, next_label, next_scroll=False, label_scroll=False):
         # A freshly launched Compose activity can expose its accessibility tree
         # just before it is ready to consume the first synthetic tap.
         for _ in range(3):
-            tap(label)
+            tap(label, scroll=label_scroll)
             try:
                 return find(next_label, scroll=next_scroll, attempts=4)
             except AssertionError:
@@ -101,9 +101,8 @@ def main():
         (output / f"{name}.png").write_bytes(run(*adb, "exec-out", "screencap", "-p", binary=True))
 
     try:
-        find("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.", scroll=True)
         tap_until_visible("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.",
-                          "Granary Camera Feeder")
+                          "Granary Camera Feeder", label_scroll=True)
         find("Dockstream Smart Fountain")
         capture("devices")
 
