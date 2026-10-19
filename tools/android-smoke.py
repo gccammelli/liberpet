@@ -101,6 +101,7 @@ def main():
         (output / f"{name}.png").write_bytes(run(*adb, "exec-out", "screencap", "-p", binary=True))
 
     try:
+        find("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.", scroll=True)
         tap_until_visible("Try the demo: a made-up home with a feeder, two fountains and two cats. No Home Assistant needed.",
                           "Granary Camera Feeder")
         find("Dockstream Smart Fountain")
