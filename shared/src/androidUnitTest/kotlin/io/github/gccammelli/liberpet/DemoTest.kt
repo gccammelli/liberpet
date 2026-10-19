@@ -19,4 +19,15 @@ class DemoTest {
         assertTrue(home.devices.all { it.serial.startsWith("DEMO") })
         assertTrue(ha.loadLogs(home).daily.values.all { it.size >= 30 }) // invented history for the charts
     }
+
+    @Test
+    fun indicatorLightsToggleInTheDemo() = runTest {
+        val ha = FakeHomeAssistant(read = { java.io.File("src/commonMain/composeResources/" + it).readBytes() })
+        suspend fun feeder() = ha.loadHome().devices.first { it.isFeeder }
+        assertEquals(false, feeder().e["light_switch"]?.on)
+        ha.press(feeder(), "light_on")
+        assertEquals(true, feeder().e["light_switch"]?.on)
+        ha.press(feeder(), "light_off")
+        assertEquals(false, feeder().e["light_switch"]?.on)
+    }
 }

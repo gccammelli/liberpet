@@ -9,7 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.gccammelli.liberpet"
+        applicationId = "io.github.gccammelli.liberpet" + if (providers.gradleProperty("liberpet.testbed").isPresent) ".testbed" else ""
         minSdk = 26
         targetSdk = 36
         versionCode = 1
