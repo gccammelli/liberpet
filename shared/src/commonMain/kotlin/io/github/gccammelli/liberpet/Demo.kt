@@ -29,7 +29,7 @@ import kotlin.time.Instant
  * "Try the demo": a pretend Home Assistant answering the same calls as a real one, so every screen runs its real
  * code. Its home is a scrubbed snapshot of a real one (files/demo/home.json: invented pets, serials, ids and places;
  * nothing personal), brought up to date: times move with the clock, today's schedule follows it, and charts and
- * Cat Insights get invented history. Switches and settings change for the session; feeding and plans don't.
+ * Cat Insights get invented history. Switches, indicator lights and settings change for the session; feeding and plans don't.
  */
 class FakeHomeAssistant(
     private val now: () -> Instant = { Clock.System.now() },
@@ -133,7 +133,12 @@ class FakeHomeAssistant(
             "switch/turn_off" -> set("off")
             "select/select_option" -> set(data.s("option") ?: return "[]")
             "number/set_value" -> set(data.s("value") ?: return "[]")
-            "button/press", "homeassistant/update_entity" -> {}
+            // The indicator is a pair of buttons over a binary sensor: pressing one flips the sensor, as on a real device.
+            "button/press" -> target?.let { INDICATOR.matchEntire(it) }?.destructured?.let { (dev, on, n) ->
+                val id = "binary_sensor.${dev}_indicator$n"
+                m[id]?.let { m[id] = JsonObject(it + ("state" to JsonPrimitive(on))) }
+            }
+            "homeassistant/update_entity" -> {}
             else -> throw ApiException("This is the demo: there's no real feeder or fountain to do that")
         }
         return "[]"
@@ -222,3 +227,5 @@ class FakeHomeAssistant(
         val DATE_TIME = Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*""")
     }
 }
+
+private val INDICATOR = Regex("""button\.(.+)_turn_(on|off)_indicator(_\d+)?""")
