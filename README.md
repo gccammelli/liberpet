@@ -1,5 +1,11 @@
 # LiberPet
 
+[![Build](https://github.com/gccammelli/liberpet/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/gccammelli/liberpet/actions/workflows/build.yml)
+[![Coverage](https://codecov.io/gh/gccammelli/liberpet/graph/badge.svg)](https://codecov.io/gh/gccammelli/liberpet)
+[![Latest release](https://img.shields.io/github/v/release/gccammelli/liberpet)](https://github.com/gccammelli/liberpet/releases/latest)
+[![License](https://img.shields.io/github/license/gccammelli/liberpet)](LICENSE)
+[![Open issues](https://img.shields.io/github/issues/gccammelli/liberpet)](https://github.com/gccammelli/liberpet/issues)
+
 An open-source app for PETLIBRO feeders and water fountains, through **your own Home Assistant**. Its screens follow
 the official Petlibro app's layout, so it feels familiar.
 
@@ -14,6 +20,9 @@ the official Petlibro app's layout, so it feels familiar.
 The screenshots are the built-in demo: a made-up home, with invented pets.
 
 ## Download
+
+[![Download Android APK](https://img.shields.io/badge/Download-Android_APK-3DDC84?logo=android&logoColor=white)](https://github.com/gccammelli/liberpet/releases/latest/download/liberpet.apk)
+[![Download iPhone IPA](https://img.shields.io/badge/Download-iPhone_IPA-000000?logo=apple&logoColor=white)](https://github.com/gccammelli/liberpet/releases/latest/download/liberpet.ipa)
 
 - **Android:** [the latest `liberpet.apk`](https://github.com/gccammelli/liberpet/releases/latest/download/liberpet.apk)
   from GitHub Releases.
@@ -135,6 +144,10 @@ signature. Pushing a `v*` tag builds and publishes the signed APK (and the `.ipa
 **Adding or removing an optional extra:** each one is an entry in
 [`Features.kt`](shared/src/commonMain/kotlin/io/github/gccammelli/liberpet/Features.kt); its screens check
 `Feature.X.on()`, and Settings lists it by itself.
+
+## Contributing
+
+Bug reports, device requests, feature requests and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for tests, privacy rules and the required before/after visual evidence for user-facing changes.
 
 ## Disclaimer
 
