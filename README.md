@@ -65,6 +65,7 @@ with it, so the official app can stay signed in on your main account.
 2. **In LiberPet:** enter your Home Assistant address and a long-lived access token (your Home Assistant
    profile › Security › Long-lived access tokens). Away from home, use an address that works from outside, such as
    your Home Assistant Cloud address or your own HTTPS domain.
+   Use a dedicated non-administrator Home Assistant user for the app's token; it can do whatever that user can.
 3. **Optional:** the live camera ([docs/camera.md](docs/camera.md)) and the [extras](#optional-extras).
 
 ## What works
