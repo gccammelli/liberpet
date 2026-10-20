@@ -52,8 +52,6 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>LiberPet connects to your Home Assistant on your home network.</string>

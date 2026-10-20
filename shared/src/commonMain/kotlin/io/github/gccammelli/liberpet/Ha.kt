@@ -66,7 +66,7 @@ class HaHttp(url: String, private val token: String) : HaBackend {
         install(HttpTimeout) { connectTimeoutMillis = 15_000; requestTimeoutMillis = 60_000; socketTimeoutMillis = 60_000 }
         install(WebSockets)
         expectSuccess = false
-    }
+    }.localOnlyCleartext()
 
     override suspend fun ws(commands: List<JsonObject>): List<JsonElement?> {
         val out = mutableListOf<JsonElement?>()
