@@ -116,7 +116,7 @@ private fun Controls(player: ExoPlayer, modifier: Modifier) {
  * HTTP 416. Retry those shortly instead of failing (the default would drop the only playlist and stop).
  */
 @OptIn(UnstableApi::class)
-private object RetryEarlyParts : DefaultLoadErrorHandlingPolicy() {
+internal object RetryEarlyParts : DefaultLoadErrorHandlingPolicy() {
     private fun early(info: LoadErrorHandlingPolicy.LoadErrorInfo) =
         (info.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode == 416
 

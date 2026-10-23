@@ -37,6 +37,7 @@ class ExtendedScreenTest {
     private var postFailure = false
     private var snapshotFailure = false
     private var saveFailure: Throwable? = null
+    private var labelPosted = false
     private var pickedImage: ByteArray? = null
     private val platform = object : PlatformUi {
         override val appVersion = "test"
@@ -276,14 +277,28 @@ class ExtendedScreenTest {
             compose.onAllNodesWithText(label, substring = true).onFirst().assertExists()
         }
     }
-    private fun backend(empty: Boolean = false, recognition: String = "ready", questions: Boolean = false, recorder: Boolean = true, learned: Int = 5, noCat: Int = 2) {
+    private fun backend(empty: Boolean = false, recognition: String = "ready", questions: Boolean = false, recorder: Boolean = true, learned: Int = 5, noCat: Int = 2,
+                        labelHelper: Boolean = true, learnOnLabel: Boolean = false, missingReply: Boolean = false, guess: String? = NO_CAT, video: String? = null) {
         val demo = FakeHomeAssistant(read = { java.io.File("src/commonMain/composeResources/$it").readBytes() })
         val backend = object : HaBackend by demo {
             override suspend fun get(path: String): String = when {
                 path.endsWith(RECORDER_SETTINGS) -> """{"state":"${MotionSettings().encode()}"}"""
-                path.endsWith(CATS_SENSOR) -> """{"state":"$recognition","attributes":{"accuracy":0.9,"labels":{"${st.home!!.pets.first().id}":$learned,"none":$noCat},"to_label":${if (questions) """[{"id":"photo1","path":"_learn/mochi.jpg","side":"left","guess":"none"}]""" else "[]"},"clips":{}}}"""
+                path.endsWith(CATS_SENSOR) -> {
+                    if (labelPosted && missingReply) throw ApiException("Recognizer offline")
+                    buildJsonObject {
+                        put("state", recognition)
+                        put("attributes", buildJsonObject {
+                            put("accuracy", 0.9)
+                            put("labels", buildJsonObject { put(st.home!!.pets.first().id, learned + if (labelPosted && learnOnLabel) 1 else 0); put(NO_CAT, noCat) })
+                            put("to_label", buildJsonArray { if (questions && !(labelPosted && learnOnLabel)) add(buildJsonObject {
+                                put("id", "photo1"); put("path", "_learn/mochi.jpg"); put("side", "left"); put("guess", guess); put("video", video)
+                            }) })
+                            put("clips", JsonObject(emptyMap()))
+                        })
+                    }.toString()
+                }
                 path.endsWith(RECORD_BUTTON) && recorder -> """{"state":"unknown"}"""
-                path.endsWith(LABEL_ENTITY) -> """{"state":""}"""
+                path.endsWith(LABEL_ENTITY) -> if (labelHelper) """{"state":""}""" else throw ApiException("Missing label helper")
                 else -> demo.get(path)
             }
             override suspend fun bytes(path: String): ByteArray {
@@ -293,6 +308,7 @@ class ExtendedScreenTest {
             override suspend fun post(path: String,body: String): String {
                 requests += path to body
                 if (postFailure) throw ApiException("service denied")
+                if (body.contains(LABEL_ENTITY)) labelPosted = true
                 return if(path.contains("input_text/") || path.contains("input_button/")) "[]" else demo.post(path,body)
             }
             override suspend fun ws(commands: List<JsonObject>): List<JsonElement?> = commands.map { c ->
@@ -591,6 +607,302 @@ class ExtendedScreenTest {
             compose.onNodeWithText(label).performScrollTo().performClick()
             compose.onNodeWithContentDescription("Close").performClick()
         }
+    }
+
+    private fun hydrationState(goalPerPet: Int = 100): UiState = st.copy(home = st.home!!.copy(pets = st.home!!.pets.map { pet ->
+        pet.copy(e = pet.e + ("drinkingGoal" to Entity(pet.e.getValue("drinkingGoal").id, goalPerPet.toString(), JsonObject(emptyMap()))))
+    }))
+
+    @Test fun fountainDisplaysANonzeroLinkedGoalAndOpensFlowAndMaintenance() {
+        val state = hydrationState()
+        show("Goal: 200ml") { FountainScreen(fountain, state) }
+        compose.onNodeWithText("Flow Type").performClick()
+        compose.onNodeWithText("Choose Flow Type").assertExists()
+        compose.onNodeWithContentDescription("Close").performClick()
+        for (label in listOf("Filter", "Cleaning")) {
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close").performClick()
+        }
+    }
+
+    @Test fun hydrationHistoryUsesANonzeroGoalAndYesterdaySensorFallback() {
+        val d = fountain.copy(e = fountain.e + ("yesterday_drinking_amount" to Entity("sensor.yesterday", "17", JsonObject(emptyMap()))))
+        show("WATER INTAKE") { WaterIntakeScreen(d, hydrationState().copy(logs = Logs())) }
+        compose.onNodeWithText("Goal: 200 ml").assertExists()
+        for (label in listOf("wk.", "mth.", "yr.", "td.")) {
+            compose.onAllNodesWithText(label, substring = true).onFirst().performClick()
+            compose.onAllNodesWithText(label, substring = true).onFirst().assertExists()
+        }
+    }
+
+    @Test fun replacingAFilterUpdatesAChangedCycleAndSendsTheResetButton() {
+        backend()
+        var dismissed = false
+        show("FILTER") { MaintenanceSheet(fountain, "filter") { dismissed = true } }
+        compose.onNodeWithContentDescription("Increase").performClick()
+        compose.onNodeWithText("15 days").assertExists()
+        compose.onNodeWithText("Reset (I replaced the filter)").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.any { it.first.endsWith("/set_value") } && requests.any { it.first.endsWith("/press") } }
+        assertTrue(dismissed)
+        val data = json.parseToJsonElement(requests.first { it.first.endsWith("/set_value") }.second).jsonObject
+        assertEquals(fountain.e.getValue("filter_cycle").id, data.s("entity_id")); assertEquals("15.0", data.s("value"))
+        assertTrue(requests.any { it.second.contains(fountain.e.getValue("filter_reset").id) })
+    }
+
+    @Test fun cleaningWithAnUnchangedCycleOnlySendsTheReset() {
+        backend()
+        show("CLEANING") { MaintenanceSheet(fountain, "cleaning") {} }
+        compose.onNodeWithText("Reset (I cleaned it)").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.any { it.first.endsWith("/press") } }
+        assertFalse(requests.any { it.first.endsWith("/set_value") })
+        assertTrue(requests.any { it.second.contains(fountain.e.getValue("cleaning_reset").id) })
+    }
+
+    @Test fun timedFlowUpdatesChangedPauseAndFlowDurations() {
+        backend()
+        show("Choose Flow Type") { FlowTypeSheet(fountain) {} }
+        compose.onNodeWithText("Timed Flow").performClick()
+        compose.onAllNodesWithContentDescription("Increase").onFirst().performClick()
+        compose.onAllNodesWithContentDescription("Increase").onLast().performClick()
+        compose.onNodeWithText("Confirm").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.count { it.first.endsWith("/set_value") } == 2 }
+        for (key in listOf("water_interval", "water_dispensing_duration")) {
+            val call = requests.first { it.second.contains(fountain.e.getValue(key).id) }
+            assertEquals("16.0", json.parseToJsonElement(call.second).jsonObject.s("value"))
+        }
+    }
+
+    @Test fun confirmingTheCurrentContinuousFlowDoesNotSendRedundantCommands() {
+        backend()
+        val d = fountain.copy(e = fountain.e + ("water_dispensing_mode" to Entity(fountain.e.getValue("water_dispensing_mode").id, fountain.dispensingModes.first(), fountain.e.getValue("water_dispensing_mode").attrs)))
+        var dismissed = false
+        show("Choose Flow Type") { FlowTypeSheet(d) { dismissed = true } }
+        compose.onNodeWithText("Confirm").performClick()
+        assertTrue(dismissed); assertTrue(requests.isEmpty())
+    }
+
+    @Test fun nonzeroHydrationGoalIsSplitBetweenActualLinkedPets() {
+        backend()
+        val state = hydrationState(120)
+        show("Daily Hydration Goal") { GoalScreen(fountain, state) }
+        compose.onAllNodesWithText("120 ml").assertCountEquals(2)
+        compose.onNodeWithText("Confirm").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.count { it.first.endsWith("/set_value") } == 2 }
+        val updates = requests.filter { it.first.endsWith("/set_value") }.map { json.parseToJsonElement(it.second).jsonObject }
+        assertEquals(state.home!!.pets.map { it.e.getValue("drinkingGoal").id }.toSet(), updates.map { it.s("entity_id") }.toSet())
+        assertTrue(updates.all { it.s("value") == "120.0" })
+    }
+
+    @Test fun manualFeedingAmountHonorsTheMinimumAndMaximumPortions() {
+        var grams = 0
+        show("FEEDING AMOUNT") { FeedNowSheet(feeder, {}, { grams = it }) }
+        compose.onNodeWithContentDescription("Decrease").performClick()
+        compose.onNodeWithText("10 g").assertExists()
+        compose.onNodeWithContentDescription("Increase").performClick()
+        compose.onNodeWithText("20 g").assertExists()
+        compose.onNode(hasProgressBarRangeInfo(androidx.compose.ui.semantics.ProgressBarRangeInfo(2f, 1f..48f, 46)))
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(48f) }
+        compose.onNodeWithText("480 g").assertExists()
+        compose.onNodeWithContentDescription("Increase").performClick()
+        compose.onNodeWithText("480 g").assertExists()
+        compose.onNodeWithContentDescription("Decrease").performClick()
+        compose.onNodeWithText("470 g").assertExists()
+        compose.onNodeWithText("Confirm").performClick()
+        assertEquals(470, grams)
+    }
+
+    private fun schedule(vararg plans: Pair<String, String>) = feeder.copy(tz = zone, e = feeder.e + ("feeding_schedule" to Entity("binary_sensor.schedule", "on", buildJsonObject {
+        put("schedule", buildJsonArray { plans.forEachIndexed { i, (time, state) -> add(buildJsonObject {
+            put("id", i + 1); put("time", time); put("state", state); put("today", true); put("enabled", true)
+            put("amount_g", 10); put("amount_raw", 1)
+        }) } })
+    })))
+
+    @Test fun todaysScheduleDistinguishesCompletedSkippedFailedAndPendingFeeds() {
+        backend()
+        val d = schedule("08:00" to "dispensed", "08:01" to "skipped", "08:02" to "failed", "08:03" to "pending", "23:00" to "to_be_skipped", "23:01" to "dispensed")
+        show("Today's Schedule") { TodaySchedule(d, 12 * 60) }
+        for (text in listOf("Completed", "Skipped", "Failed")) compose.onNodeWithText(text).assertExists()
+        compose.onAllNodes(isToggleable()).assertCountEquals(4)
+        compose.onAllNodes(isToggleable()).onFirst().performClick()
+        compose.onAllNodes(isToggleable())[2].performClick()
+        compose.onAllNodes(isToggleable()).onLast().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.count { it.first.endsWith("/skip_feeding_plan") } == 2 }
+        val top = json.parseToJsonElement(requests.first { it.first.endsWith("/toggle_today_feeding_schedule") }.second).jsonObject
+        assertEquals("false", top.s("enable"))
+        val skips = requests.filter { it.first.endsWith("/skip_feeding_plan") }.map { json.parseToJsonElement(it.second).jsonObject }
+        assertEquals(mapOf("5" to "false", "6" to "true"), skips.associate { it.s("plan_id") to it.s("skip") })
+    }
+
+    @Test fun aFullySkippedUpcomingScheduleCanBeReenabled() {
+        backend()
+        show("Today's Schedule") { TodaySchedule(schedule("23:00" to "to_be_skipped"), 12 * 60) }
+        compose.onAllNodes(isToggleable()).onFirst().assertIsOff().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.any { it.first.endsWith("/toggle_today_feeding_schedule") } }
+        val top = json.parseToJsonElement(requests.first { it.first.endsWith("/toggle_today_feeding_schedule") }.second).jsonObject
+        assertEquals("true", top.s("enable"))
+    }
+
+    @Test fun teachingWaitsForRecognizerAcknowledgementBeforeAdvancing() {
+        backend(questions = true, learnOnLabel = true)
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("No cat at this bowl").performScrollTo().performClick()
+        compose.onNodeWithText("No cat at this bowl").assertIsNotEnabled()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("All caught up").assertExists()
+        assertTrue(labelPosted)
+    }
+
+    @Test fun teachingWithoutTheLabelHelperExplainsTheRequiredSetup() {
+        backend(questions = true, labelHelper = false)
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("No cat at this bowl").performScrollTo().performClick()
+        compose.onNodeWithText("One step in Home Assistant first").assertExists()
+        assertFalse(labelPosted)
+    }
+
+    @Test fun teachingTimesOutWhenTheRecognizerDoesNotAcknowledge() {
+        backend(questions = true)
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("No cat at this bowl").performScrollTo().performClick()
+        compose.mainClock.advanceTimeBy(10_000)
+        compose.onNodeWithText("The recognizer didn't answer. Is it running?").performScrollTo().assertExists()
+        compose.onNodeWithText("No cat at this bowl").assertIsEnabled()
+    }
+
+    @Test fun missingRecognizerRepliesDoNotBecomeSuccessfulLabels() {
+        backend(questions = true, missingReply = true)
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("No cat at this bowl").performScrollTo().performClick()
+        compose.mainClock.advanceTimeBy(10_000)
+        compose.onNodeWithText("The recognizer didn't answer. Is it running?").performScrollTo().assertExists()
+        compose.onNodeWithText("All caught up").assertDoesNotExist()
+    }
+
+    @Test fun teachingServiceFailureLeavesTheQuestionAvailableToRetry() {
+        backend(questions = true); postFailure = true
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("No cat at this bowl").performScrollTo().performClick()
+        compose.onNodeWithText("service denied").performScrollTo().assertExists()
+        compose.onNodeWithText("No cat at this bowl").assertIsEnabled()
+    }
+
+    @Test fun teachingRefreshesWhenAnotherClientHasLabelledTheQuestion() {
+        backend(questions = true, learnOnLabel = true)
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        labelPosted = true
+        compose.mainClock.advanceTimeBy(21_000)
+        compose.onNodeWithText("All caught up").assertExists()
+    }
+
+    @Test fun teachingShowsTheNameOfAKnownGuessAndKeepsVideoFailuresRecoverable() {
+        backend(questions = true, guess = st.home!!.pets.first().id, video = "clip.mp4")
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onNodeWithText("LiberPet thinks: ${st.home!!.pets.first().name}").assertExists()
+        compose.onNodeWithText("No cat at this bowl").assertIsEnabled()
+    }
+
+    @Test fun teachingDoesNotInventTheNameOfAnUnknownGuess() {
+        backend(questions = true, guess = "removed-pet")
+        show("Who's at the left bowl in this clip?") { TeachScreen(feeder, st) }
+        compose.onAllNodesWithText("LiberPet thinks:", substring = true).assertCountEquals(0)
+    }
+
+    @Test fun offlineFountainCardKeepsMaintenanceAndWaterWarningsVisible() {
+        val bad = fountain.copy(room = null, e = mapOf(
+            "online" to Entity("binary_sensor.online", "off", JsonObject(emptyMap())),
+            "remaining_filter_days" to Entity("sensor.filter", "0", JsonObject(emptyMap())),
+            "remaining_cleaning_days" to Entity("sensor.cleaning", "-1", JsonObject(emptyMap())),
+            "weight_percent" to Entity("sensor.water", "5", JsonObject(emptyMap()))))
+        show(bad.name) { DeviceCard(bad, UiState(), androidx.compose.ui.Modifier) }
+        compose.onNodeWithText("4 Irregularities Detected").assertExists()
+        compose.onNodeWithText("0 ml").assertExists()
+    }
+
+    @Test fun feederCardAcceptsMissingRoomAndTurnedOffIndicator() {
+        val d = feeder.copy(room = null, e = mapOf("light_switch" to Entity("binary_sensor.light", "off", JsonObject(emptyMap()))))
+        show(d.name) { DeviceCard(d, UiState(), androidx.compose.ui.Modifier) }
+        compose.onNodeWithText("--").assertExists()
+    }
+
+    @Test fun cancellingTheHeaderPhotoPickerPreservesTheExistingPicture() {
+        val image = java.io.File("src/commonMain/composeResources/files/demo/mochi.jpg").readBytes()
+        Repo.setHeader(image)
+        show(feeder.name) { HomeTab(st) }
+        compose.onRoot().performTouchInput { longClick(androidx.compose.ui.geometry.Offset(120f, 130f)) }
+        compose.onNodeWithText("Choose photo").performClick()
+        assertArrayEquals(image, Repo.header.value); assertTrue(messages.isEmpty())
+    }
+
+    @Test fun motionLoadsTheConfiguredCameraPicture() {
+        backend(); cameraHome()
+        show("Motion Detection") { MotionScreen(feeder) }
+        compose.onNodeWithText("Loading the camera picture…").assertDoesNotExist()
+        compose.onNodeWithText("Save").performScrollTo().assertIsEnabled()
+    }
+
+    private fun mediaFolders(folders: Map<String, List<String>>, names: Map<String, String> = emptyMap(), failResolve: Boolean = false) {
+        backend()
+        val original = Repo.ha!!
+        Repo.javaClass.getDeclaredField("ha").apply { isAccessible = true }.set(Repo, object : HaBackend by original {
+            override suspend fun get(path: String): String {
+                val response = original.get(path)
+                if (!path.endsWith(CATS_SENSOR)) return response
+                val data = json.parseToJsonElement(response).jsonObject
+                return JsonObject(data + ("attributes" to JsonObject(data.o("attributes")!! + ("clips" to buildJsonObject {
+                    names.forEach { (clip, pet) -> put(clip, buildJsonObject { put("left", pet) }) }
+                })))).toString()
+            }
+            override suspend fun ws(commands: List<JsonObject>): List<JsonElement?> = commands.map { command ->
+                when (command.s("type")) {
+                    "media_source/browse_media" -> {
+                        val path = command.s("media_content_id")!!.substringAfter("local/")
+                        buildJsonObject { put("children", buildJsonArray { folders[path].orEmpty().forEach { title ->
+                            add(buildJsonObject { put("title", title); put("media_content_id", "media-source://media_source/local/$path/$title") })
+                        } }) }
+                    }
+                    "media_source/resolve_media" -> if (failResolve) throw ApiException("Recording offline") else original.ws(listOf(command)).single()
+                    else -> original.ws(listOf(command)).single()
+                }
+            }
+        })
+    }
+
+    @Test fun recordingDayWithoutClipsDoesNotPretendThatPlaybackIsAvailable() {
+        val day = Clock.System.now().local().date.toString()
+        mediaFolders(mapOf("." to listOf("liberpet"), "liberpet" to listOf(day)))
+        show("Recordings") { GalleryScreen(feeder, st) }
+        compose.onNodeWithText("No clips on this day").assertExists()
+    }
+
+    @Test fun missingRecordingFolderShowsSetupInsteadOfAnEmptySuccessfulGallery() {
+        mediaFolders(emptyMap())
+        show("Recordings") { GalleryScreen(feeder, st) }
+        compose.onNodeWithText("No recordings in Home Assistant yet").assertExists()
+    }
+
+    @Test fun singleRecordingShowsRecognizedPetAndPluralFeedingMarkers() {
+        val now = Clock.System.now(); val day = now.local().date.toString()
+        val filename = "08-30-00_feed-motion_42s.mp4"
+        mediaFolders(mapOf("." to listOf("liberpet"), "liberpet" to listOf(day), "liberpet/$day" to listOf(filename)), mapOf("$day/${filename.removeSuffix(".mp4")}" to st.home!!.pets.first().id))
+        val logs = Logs(feeds = mapOf(feeder.serial to listOf(LogEntry(now, "First feeding"), LogEntry(now, "Second feeding"))))
+        show("Recordings") { GalleryScreen(feeder, st.copy(logs = logs)) }
+        compose.onNodeWithText("1 clip").assertExists(); compose.onNodeWithText("2 feedings").assertExists()
+        compose.onNodeWithText(st.home!!.pets.first().name).assertExists()
+    }
+
+    @Test fun oneFeedingMarkerUsesSingularAndUnrecognizedClipReasonsStayUnlabelled() {
+        val now = Clock.System.now(); val day = now.local().date.toString()
+        mediaFolders(mapOf("." to listOf("liberpet"), "liberpet" to listOf(day), "liberpet/$day" to listOf("08-30-00_other_42s.mp4")))
+        show("Recordings") { GalleryScreen(feeder, st.copy(logs = Logs(feeds = mapOf(feeder.serial to listOf(LogEntry(now, "Feeding")))))) }
+        compose.onNodeWithText("1 feeding").assertExists(); compose.onNodeWithText("08:30").assertExists()
+    }
+
+    @Test fun inaccessibleRecordingShowsTheBackendErrorWithBackNavigation() {
+        mediaFolders(emptyMap(), failResolve = true)
+        show("Clip") { ClipScreen("missing-clip", "Clip") }
+        compose.onNodeWithText("Recording offline").assertExists()
+        compose.onNodeWithContentDescription("Back").assertHasClickAction()
     }
 
     @Test fun teachingExplainsWhenAllClipsAreLabelled() {

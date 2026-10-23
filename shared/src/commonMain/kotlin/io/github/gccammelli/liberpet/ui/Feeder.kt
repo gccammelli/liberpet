@@ -278,9 +278,8 @@ internal fun pastStatus(p: Plan, now: Int): String? {
 }
 
 @Composable
-fun TodaySchedule(d: Device) {
+fun TodaySchedule(d: Device, now: Int = Clock.System.now().local().time.let { it.hour * 60 + it.minute }) {
     val err = errorToast()
-    val now = Clock.System.now().local().time.let { it.hour * 60 + it.minute }
     val today = d.plans.filter { it.todayState != null && it.enabled }.sortedBy { minutesOf(it.time) }
     val upcoming = today.filter { pastStatus(it, now) == null }
     Card(padding = PaddingValues(horizontal = 24.dp, vertical = 22.dp)) {
@@ -457,7 +456,7 @@ fun AmountSheet(title: String, portions: Int, step: Int, onDismiss: () -> Unit, 
 @Composable
 private fun RoundStep(icon: ImageVector, onClick: () -> Unit) =
     Box(Modifier.size(46.dp).clip(CircleShape).background(C.Card).border(1.dp, C.Line, CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, Modifier.size(22.dp), tint = C.Text)
+        Icon(icon, if (icon == Icons.Default.Add) "Increase" else "Decrease", Modifier.size(22.dp), tint = C.Text)
     }
 
 // ---------- Schedule ----------
