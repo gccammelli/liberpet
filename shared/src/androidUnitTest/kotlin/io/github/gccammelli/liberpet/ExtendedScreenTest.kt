@@ -681,6 +681,44 @@ class ExtendedScreenTest {
         assertTrue(dismissed); assertTrue(requests.isEmpty())
     }
 
+    @Test fun timedFlowWithoutOptionalDurationEntitiesUsesVisibleDefaults() {
+        backend()
+        val d=fountain.copy(e=fountain.e - setOf("water_dispensing_mode","water_interval","water_dispensing_duration"))
+        var dismissed=false
+        show("Choose Flow Type") { FlowTypeSheet(d) { dismissed=true } }
+        compose.onNodeWithText("Timed Flow").performClick()
+        compose.onAllNodesWithText("15 min").assertCountEquals(2)
+        compose.onNodeWithText("Confirm").performClick()
+        compose.waitForIdle()
+        assertTrue(dismissed); assertTrue(requests.isEmpty())
+    }
+
+    @Test fun fountainOverdueRemindersAndIndicatorControlsPreserveTheCorrectEntity() {
+        backend()
+        val d=fountain.copy(e=fountain.e + mapOf(
+            "remaining_filter_days" to Entity("sensor.filter","-2",JsonObject(emptyMap())),
+            "remaining_cleaning_days" to Entity("sensor.cleaning","0",JsonObject(emptyMap())),
+            "light_switch" to Entity("binary_sensor.light","off",JsonObject(emptyMap()))))
+        show("Settings") { FountainSettingsScreen(d,st) }
+        compose.onNodeWithText("2 day(s) overdue").performScrollTo().assertExists()
+        compose.onNodeWithText("0 day(s) overdue").performScrollTo().assertExists()
+        compose.onNodeWithText("Indicator Lights").performScrollTo()
+        compose.onAllNodes(isToggleable()).onFirst().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.any { it.second.contains(d.e.getValue("light_on").id) } }
+        assertTrue(requests.first { it.second.contains(d.e.getValue("light_on").id) }.first.endsWith("/press"))
+    }
+
+    @Test fun waterChartDrawsRecordedIntakeAndKeepsEmptyHoursAtZero() {
+        show("Water chart") {
+            androidx.compose.foundation.layout.Column {
+                T("Water chart")
+                Chart(listOf(0.0,25.0,50.0),listOf("08","09","10"))
+            }
+        }
+        compose.onNodeWithText("50").assertExists()
+        compose.onNodeWithText("0").assertExists()
+    }
+
     @Test fun nonzeroHydrationGoalIsSplitBetweenActualLinkedPets() {
         backend()
         val state = hydrationState(120)
