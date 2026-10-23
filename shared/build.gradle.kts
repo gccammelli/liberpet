@@ -72,3 +72,18 @@ android {
 compose.resources {
     packageOfResClass = "io.github.gccammelli.liberpet.res"
 }
+
+// Keep the full debug application above the agreed line-coverage floor.
+kover {
+    reports {
+        filters {
+            excludes {
+                // Compose-generated accessors/collectors; no handwritten code uses this package.
+                packages("io.github.gccammelli.liberpet.res")
+            }
+        }
+        variant("debug") {
+            verify { rule { minBound(95) } }
+        }
+    }
+}
