@@ -49,6 +49,7 @@ class ScreenTest {
     private val fountain get() = st.home!!.devices.first { it.isFountain }
 
     @Before fun home() {
+        ThemeMode.mode = "system"
         val values = mutableMapOf("demo" to "true")
         Repo.init(PlatformStorage(object : KeyValue {
             override fun getString(key: String) = values[key]

@@ -157,3 +157,13 @@ trademarks of their owner. It uses none of Petlibro's code or assets: the device
 demo pets' photos are AI-generated. Provided as is, without warranty.
 
 [![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cammelli)
+
+### Coverage checks
+
+CI enforces at least **95% line coverage** for the shared Android debug code, using Kover. The only exclusion is the Compose-generated `io.github.gccammelli.liberpet.res` package: resource accessors and collectors produced under `shared/build/generated/compose/resourceGenerator/`. These are generated resource lookup tables and wrappers, rather than application decisions. Handwritten UI, demo behavior, networking, storage, encryption and device logic remain measured. Run the full automated suite and gate locally:
+
+```sh
+./gradlew testDebugUnitTest :shared:koverXmlReportDebug :shared:koverVerifyDebug
+```
+
+The report is `shared/build/reports/kover/reportDebug.xml`. Tests include simulated service boundaries and Robolectric screens; physical devices and iOS execution are separate checks.
