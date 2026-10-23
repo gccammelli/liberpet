@@ -185,7 +185,7 @@ fun homeFrom(devs: JsonArray, ents: JsonArray, areas: JsonArray, states: Map<Str
         Camera(id, st.attrs.s("friendly_name") ?: id, areaName[r.s("area_id") ?: deviceArea[r.s("device_id")]])
     }
     val owner = states.values.firstOrNull { it.attrs.s("nickname") != null && it.id.startsWith("sensor.petlibro_") }?.attrs?.s("nickname")
-    return Home(devices, pets.sortedWith(compareBy({ it.e["pet"]?.attrs?.s("mainPet") != "true" }, { it.id.toLongOrNull() ?: 0 })), owner, cameras) // devices in Home Assistant's order (Petlibro's isn't exposed); main pet first, as Petlibro
+    return Home(devices, pets.sortedWith(compareBy({ it.e["pet"]?.attrs?.s("mainPet") != "true" }, { it.id.toLongOrNull() ?: 0L })), owner, cameras) // devices in Home Assistant's order (Petlibro's isn't exposed); main pet first, as Petlibro
 }
 
 // ---------- Feeder ----------

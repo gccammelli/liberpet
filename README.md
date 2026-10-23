@@ -160,7 +160,7 @@ demo pets' photos are AI-generated. Provided as is, without warranty.
 
 ### Coverage checks
 
-CI enforces at least **95% line coverage** for the shared Android debug code, using Kover. The only exclusion is the Compose-generated `io.github.gccammelli.liberpet.res` package: resource accessors and collectors produced under `shared/build/generated/compose/resourceGenerator/`. These are generated resource lookup tables and wrappers, rather than application decisions. Handwritten UI, demo behavior, networking, storage, encryption and device logic remain measured. Run the full automated suite and gate locally:
+**The target is at least 95% fully covered lines in [Codecov](https://app.codecov.io/gh/gccammelli/liberpet).** Partial lines remain uncovered, and the Codecov project check uses a fixed 95% target with no tolerance. The separate Kover gate measures executed lines; passing it does not prove the Codecov target has been reached. Coverage upload failures fail CI. The only exclusion is the Compose-generated `io.github.gccammelli.liberpet.res` package: resource accessors and collectors produced under `shared/build/generated/compose/resourceGenerator/`. These are generated resource lookup tables and wrappers, rather than application decisions. Handwritten UI, demo behavior, networking, storage, encryption and device logic remain measured. Run the full automated suite and gate locally:
 
 ```sh
 ./gradlew testDebugUnitTest :shared:koverXmlReportDebug :shared:koverVerifyDebug

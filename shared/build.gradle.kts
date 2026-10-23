@@ -75,6 +75,7 @@ compose.resources {
 
 // Keep the full debug application above the agreed line-coverage floor.
 kover {
+    useJacoco("0.8.15")
     reports {
         filters {
             excludes {

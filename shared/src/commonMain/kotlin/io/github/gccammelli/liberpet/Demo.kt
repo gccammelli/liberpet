@@ -116,8 +116,8 @@ class FakeHomeAssistant(
         return when {
             id.endsWith("granary_camera_feeder_recent_activity") ->
                 JsonObject(st + ("attributes" to JsonObject(st.o("attributes")!! + ("records" to records))))
-            id.endsWith("feeder_today_feeding_times") -> state(todays.size)
-            id.endsWith("feeder_today_feeding_quantity_weight") -> state(todays.size * grams)
+            id.endsWith("feeder_today_s_feeding_times") -> state(todays.size)
+            id.endsWith("feeder_today_s_feeding_quantity_weight") -> state(todays.size * grams)
             id.endsWith("feeder_last_feed_time") -> records.firstOrNull()?.let { state(it.jsonObject.s("time")!!) } ?: st
             else -> st
         }

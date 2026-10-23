@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import io.github.gccammelli.liberpet.ui.*
@@ -28,17 +30,21 @@ import org.robolectric.annotation.GraphicsMode
 class ExtendedScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val messages = mutableListOf<String>()
+    private val urls = mutableListOf<String>()
     private val pictures = mutableListOf<ByteArray>()
     private val requests = java.util.concurrent.ConcurrentLinkedQueue<Pair<String,String>>()
     private var streamFailure = false
+    private var postFailure = false
+    private var snapshotFailure = false
+    private var saveFailure: Throwable? = null
     private var pickedImage: ByteArray? = null
     private val platform = object : PlatformUi {
         override val appVersion = "test"
-        override fun openUrl(url: String) = Unit
+        override fun openUrl(url: String) { urls += url }
         override fun toast(message: String) { messages += message }
         override fun setDarkBars(dark: Boolean) = Unit
         override fun pickImage(done: (ByteArray?) -> Unit) = done(pickedImage)
-        override fun saveImage(jpeg: ByteArray, name: String, done: (Throwable?) -> Unit) { pictures += jpeg; done(null) }
+        override fun saveImage(jpeg: ByteArray, name: String, done: (Throwable?) -> Unit) { pictures += jpeg; done(saveFailure) }
     }
     private companion object {
         val values = mutableMapOf<String, String>()
@@ -79,8 +85,10 @@ class ExtendedScreenTest {
         compose.onAllNodesWithText(title, substring = true).onFirst().assertExists()
         compose.mainClock.advanceTimeBy(500)
         compose.runOnIdle {
-            val view = compose.activity.window.decorView
-            view.draw(Canvas(Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)))
+            // Sheets have their own window; render them as well as the activity.
+            android.view.inspector.WindowInspector.getGlobalWindowViews().forEach { view ->
+                if (view.width > 0 && view.height > 0) view.draw(Canvas(Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)))
+            }
         }
     }
 
@@ -119,6 +127,148 @@ class ExtendedScreenTest {
         }
     }
 
+    @Test fun rootRoutesToDeviceAndPetPagesAndReturnsHome() {
+        backend()
+        show("Device") { Root() }
+        val routes = listOf(
+            Screen.Feeder(feeder.serial) to feeder.name,
+            Screen.Fountain(fountain.serial) to fountain.name,
+            Screen.Gallery(feeder.serial) to "Recordings",
+            Screen.Teach(feeder.serial) to "Teach LiberPet",
+            Screen.Schedule(feeder.serial) to "Schedule",
+            Screen.PlanEdit(feeder.serial, null) to "Save",
+            Screen.PlanEdit(feeder.serial, feeder.plans.first().id) to "DELETE",
+            Screen.PlanEdit(feeder.serial, -1) to "Save",
+            Screen.FeederSettings(feeder.serial) to "Settings",
+            Screen.Motion(feeder.serial) to "Motion Detection",
+            Screen.Logs(feeder.serial) to "Logs",
+            Screen.WaterIntake(fountain.serial) to "WATER INTAKE",
+            Screen.FountainSettings(fountain.serial) to "Settings",
+            Screen.Goal(fountain.serial) to "Daily Hydration Goal",
+            Screen.About(feeder.serial) to "About Device",
+            Screen.Pet(st.home!!.pets.first().id) to "Profile",
+            Screen.Settings to "Settings",
+        )
+        for ((route, title) in routes) {
+            compose.runOnIdle { Nav.go(route) }
+            compose.onAllNodesWithText(title).onFirst().assertExists()
+            compose.onNodeWithContentDescription("Back").performClick()
+            compose.onAllNodesWithText("Device").onLast().assertExists()
+            compose.runOnIdle { assertTrue(Nav.stack.isEmpty()) }
+        }
+    }
+
+    @Test fun rootDropsStaleRoutesForRemovedDevicesAndPets() {
+        backend()
+        show("Device") { Root() }
+        val routes = listOf(Screen.Feeder("removed"), Screen.Fountain("removed"), Screen.CameraFull("removed"),
+            Screen.Gallery("removed"), Screen.Teach("removed"), Screen.Schedule("removed"), Screen.PlanEdit("removed", null),
+            Screen.FeederSettings("removed"), Screen.Motion("removed"), Screen.Logs("removed"), Screen.WaterIntake("removed"),
+            Screen.FountainSettings("removed"), Screen.Goal("removed"), Screen.About("removed"), Screen.Pet("removed"))
+        for (route in routes) {
+            compose.runOnIdle { Nav.go(route) }
+            compose.waitForIdle()
+            compose.runOnIdle { assertTrue("Stale route $route", Nav.stack.isEmpty()) }
+            compose.onAllNodesWithText("Device").onLast().assertExists()
+        }
+    }
+
+    @Test fun sparseFeederKeepsUnknownStateAndNoScheduleVisible() {
+        Feature.entries.forEach { Repo.setFeature(it, false) }
+        val sparse = feeder.copy(e = emptyMap(), room = null, firmware = null)
+        show(sparse.name) { FeederScreen(sparse, UiState(on = true)) }
+        compose.onNodeWithText("No feeding plans today").assertExists()
+    }
+
+    @Test fun sparsePetProfileKeepsMissingMetadataExplicit() {
+        val sparse = st.home!!.pets.first().copy(e = emptyMap())
+        show("Profile") { PetScreen(sparse, UiState(on = true)) }
+        compose.onAllNodesWithText("--").onFirst().assertExists()
+        compose.onNodeWithText("Weight").performScrollTo().performClick()
+        compose.onNodeWithText("4 kg").assertExists()
+        compose.onNodeWithText("Confirm").performClick()
+        compose.onNodeWithText("WEIGHT").assertDoesNotExist()
+    }
+
+    @Test fun darkHomeDrawsReadableDefaultHeaderAndDeviceCards() {
+        ThemeMode.mode = "dark"
+        show(feeder.name) { HomeTab(st.copy(error = "offline", loading = true)) }
+        compose.onNodeWithText("offline").assertExists()
+        assertTrue(ThemeMode.dark)
+    }
+
+    @Test fun lightPreferenceOverridesSystemAppearance() {
+        ThemeMode.mode = "light"
+        show("My Pet") { MeTab(UiState()) }
+        assertFalse(ThemeMode.dark)
+        compose.onNodeWithText("0 devices").assertExists()
+    }
+
+    @Test fun initialLoadingAndRetryRecoverToTheHomeScreen() {
+        backend()
+        Repo.setFeature(Feature.CARE_TAB, false)
+        Repo.state.value = UiState(on = true)
+        compose.setContent { CompositionLocalProvider(LocalPlatform provides platform) { AppTheme { Root() } } }
+        compose.onNode(hasProgressBarRangeInfo(androidx.compose.ui.semantics.ProgressBarRangeInfo.Indeterminate)).assertExists()
+        compose.runOnIdle { Repo.state.value = UiState(on = true, error = "Home Assistant offline") }
+        compose.onNodeWithText("Home Assistant offline").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); Repo.state.value.home != null }
+        compose.onAllNodesWithText("Device").onLast().assertExists()
+        compose.onAllNodesWithText("Care").assertCountEquals(0)
+    }
+
+    @Test fun connectionRefusesInternetCleartextBeforeSavingCredentials() {
+        Repo.logout()
+        show("LiberPet") { Connect() }
+        val fields = compose.onAllNodes(hasSetTextAction())
+        fields.onFirst().performTextReplacement("short")
+        fields.onLast().performTextReplacement("test-token")
+        compose.onNodeWithText("Connect").performScrollTo().assertIsNotEnabled()
+        fields.onFirst().performTextReplacement("http://example.invalid")
+        fields.onLast().performTextReplacement("   ")
+        compose.onNodeWithText("Connect").assertIsNotEnabled()
+        fields.onLast().performTextReplacement("test-token")
+        compose.onNodeWithText("Connect").assertIsEnabled().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); compose.onAllNodesWithText("Use https://", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Connect").assertIsEnabled()
+        assertNull(Repo.haUrl); assertFalse(Repo.connected)
+    }
+
+    @Test fun demoBannerAndCameraPlaceholderClearlyDescribeSimulatedData() {
+        settings.putString("demo", "true")
+        show("This is the demo:") { HomeTab(st) }
+        compose.onNodeWithText("This is the demo:", substring = true).assertExists()
+    }
+
+    @Test fun demoCameraNeverSuggestsItIsARealLiveStream() {
+        settings.putString("demo", "true")
+        show("Live view isn't part of the demo:") { CameraCard(feeder, st) }
+        compose.onNodeWithContentDescription("Take a snapshot").assertIsNotEnabled()
+    }
+
+    @Test fun homeDeviceCardOpensTheCorrectDeviceType() {
+        show(fountain.name) { DeviceCard(fountain, st, androidx.compose.ui.Modifier) }
+        compose.onNodeWithText(fountain.name).performClick()
+        assertEquals(Screen.Fountain(fountain.serial), Nav.stack.last())
+    }
+
+    @Test fun feederCardOpensTheFeeder() {
+        show(feeder.name) { DeviceCard(feeder, st, androidx.compose.ui.Modifier) }
+        compose.onNodeWithText(feeder.name).performClick()
+        assertEquals(Screen.Feeder(feeder.serial), Nav.stack.last())
+    }
+
+    @Test fun settingsFeatureSwitchKeepsTheUserOnTheAccountTab() {
+        show("Settings") { SettingsScreen() }
+        val care = compose.onAllNodes(isToggleable()).onFirst()
+        care.performScrollTo().performClick()
+        compose.runOnIdle { assertFalse(Feature.CARE_TAB.isOn); assertEquals(1, Nav.tab) }
+        care.performClick()
+        compose.runOnIdle { assertTrue(Feature.CARE_TAB.isOn); assertEquals(2, Nav.tab) }
+        compose.onAllNodes(isToggleable()).onLast().performScrollTo().performClick()
+    }
+
     @Test fun historyRangesShowCharts() {
         show("Water") { WaterIntakeScreen(fountain, st) }
         for (label in listOf("wk.", "mth.", "yr.", "td.")) {
@@ -126,19 +276,23 @@ class ExtendedScreenTest {
             compose.onAllNodesWithText(label, substring = true).onFirst().assertExists()
         }
     }
-    private fun backend(empty: Boolean = false, recognition: String = "ready", questions: Boolean = false, recorder: Boolean = true) {
+    private fun backend(empty: Boolean = false, recognition: String = "ready", questions: Boolean = false, recorder: Boolean = true, learned: Int = 5, noCat: Int = 2) {
         val demo = FakeHomeAssistant(read = { java.io.File("src/commonMain/composeResources/$it").readBytes() })
         val backend = object : HaBackend by demo {
             override suspend fun get(path: String): String = when {
                 path.endsWith(RECORDER_SETTINGS) -> """{"state":"${MotionSettings().encode()}"}"""
-                path.endsWith(CATS_SENSOR) -> """{"state":"$recognition","attributes":{"accuracy":0.9,"labels":{"${st.home!!.pets.first().id}":5,"none":2},"to_label":${if (questions) """[{"id":"photo1","path":"_learn/mochi.jpg","side":"left","guess":"none"}]""" else "[]"},"clips":{}}}"""
+                path.endsWith(CATS_SENSOR) -> """{"state":"$recognition","attributes":{"accuracy":0.9,"labels":{"${st.home!!.pets.first().id}":$learned,"none":$noCat},"to_label":${if (questions) """[{"id":"photo1","path":"_learn/mochi.jpg","side":"left","guess":"none"}]""" else "[]"},"clips":{}}}"""
                 path.endsWith(RECORD_BUTTON) && recorder -> """{"state":"unknown"}"""
                 path.endsWith(LABEL_ENTITY) -> """{"state":""}"""
                 else -> demo.get(path)
             }
-            override suspend fun bytes(path: String): ByteArray = java.io.File("src/commonMain/composeResources/files/demo/mochi.jpg").readBytes()
+            override suspend fun bytes(path: String): ByteArray {
+                if (snapshotFailure) throw ApiException("snapshot offline")
+                return java.io.File("src/commonMain/composeResources/files/demo/mochi.jpg").readBytes()
+            }
             override suspend fun post(path: String,body: String): String {
                 requests += path to body
+                if (postFailure) throw ApiException("service denied")
                 return if(path.contains("input_text/") || path.contains("input_button/")) "[]" else demo.post(path,body)
             }
             override suspend fun ws(commands: List<JsonObject>): List<JsonElement?> = commands.map { c ->
@@ -184,6 +338,259 @@ class ExtendedScreenTest {
         compose.onNodeWithText("Knows your cats", substring = true).assertExists()
         compose.onNodeWithText("Cat Recognition").performClick()
         assertTrue(Nav.stack.last() is Screen.Teach)
+    }
+
+    @Test fun recognitionWithNoLabelsExplainsHowToStartLearning() {
+        backend(recognition = "learning", learned = 0, noCat = 0)
+        show("Label a few clips so it can tell your cats apart") { CatsCard(feeder) }
+    }
+
+    @Test fun recognitionWithOneLabelUsesSingularAndDoesNotInventAccuracy() {
+        backend(recognition = "learning", learned = 1, noCat = 0)
+        show("Learning · 1 clip labelled") { CatsCard(feeder) }
+        compose.onAllNodesWithText("% right", substring = true).assertCountEquals(0)
+    }
+
+    @Test fun recognitionWithTwoLabelsUsesPlural() {
+        backend(recognition = "learning", learned = 2, noCat = 0)
+        show("Learning · 2 clips labelled") { CatsCard(feeder) }
+    }
+
+    @Test fun recognitionWaitingForClipsDoesNotClaimReadiness() {
+        backend(recognition = "waiting", learned = 0, noCat = 0)
+        show("Waiting for the first clips with a cat") { CatsCard(feeder) }
+    }
+
+    @Test fun motionPaintingChangesTheSavedMaskRatherThanOnlyItsAppearance() {
+        backend()
+        show("Motion Detection") { MotionScreen(feeder) }
+        val center = compose.onNodeWithText("Loading the camera picture…").fetchSemanticsNode().boundsInRoot.center
+        compose.onRoot().performTouchInput { click(center) }
+        val start = center + androidx.compose.ui.geometry.Offset(0f, -50f)
+        compose.onRoot().performTouchInput { swipe(start, start + androidx.compose.ui.geometry.Offset(80f, 20f), 500) }
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); requests.any { it.first.endsWith("/set_value") } }
+        val data = json.parseToJsonElement(requests.first { it.first.endsWith("/set_value") }.second).jsonObject
+        val saved = MotionSettings.decode(data.s("value")!!)
+        assertTrue(saved.cells.any { !it }); assertTrue(saved.cells.any { it })
+        assertEquals(50, saved.sensitivity)
+        compose.waitUntil(5000) { messages.any { it.startsWith("Saved:") } }
+    }
+
+    @Test fun motionSaveFailureStaysOnTheScreenAndExplainsTheError() {
+        backend(); postFailure = true
+        Nav.go(Screen.Motion(feeder.serial))
+        show("Motion Detection") { MotionScreen(feeder) }
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it == "Couldn't save: service denied" } }
+        assertTrue(Nav.stack.last() is Screen.Motion)
+    }
+
+    @Test fun sparseFountainHasExplicitMissingGoalAndEmptyHistory() {
+        val sparse = fountain.copy(e = emptyMap(), room = null)
+        show(sparse.name) { FountainScreen(sparse, UiState()) }
+        compose.onNodeWithText("Goal: --ml").assertExists()
+        compose.onNodeWithText("No logs yet", substring = true).performScrollTo().assertExists()
+    }
+
+    @Test fun sparseWaterHistorySupportsAllRangesWithoutData() {
+        val sparse = fountain.copy(e = emptyMap())
+        show("WATER INTAKE") { WaterIntakeScreen(sparse, UiState()) }
+        for (label in listOf("wk.", "mth.", "yr.", "td.")) {
+            compose.onAllNodesWithText(label, substring = true).onFirst().performClick()
+            compose.onAllNodesWithText(label, substring = true).onFirst().assertExists()
+        }
+    }
+
+    @Test fun fountainIrregularitiesOpenTheReminder() {
+        val bad = fountain.copy(e = fountain.e + ("weight_percent" to Entity("sensor.water", "5", JsonObject(emptyMap()))))
+        show(bad.name) { FountainScreen(bad, st) }
+        compose.onNodeWithText("Irregularities Detected", substring = true).performClick()
+        compose.onNodeWithText("Important Reminder").assertExists()
+        compose.onNodeWithText("Previous Step").performClick()
+        compose.onNodeWithText("Important Reminder").assertDoesNotExist()
+    }
+
+    @Test fun emptyGoalNeverAttemptsToUpdateAnUnlinkedPet() {
+        backend()
+        show("Daily Hydration Goal") { GoalScreen(fountain, UiState()) }
+        compose.onNodeWithText("Confirm").performClick()
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test fun stepperStopsAtBothBoundsAndChangesValuesBetweenThem() {
+        var value by androidx.compose.runtime.mutableStateOf(1)
+        show("Every") { Stepper("Every", value, "days", 1, 3) { value = it } }
+        fun controls() = compose.onAllNodes(hasClickAction() and hasAnySibling(hasText("$value days")))
+        controls().onFirst().performClick()
+        assertEquals(1, value)
+        controls().onLast().performClick()
+        compose.onNodeWithText("2 days").assertExists()
+        controls().onLast().performClick()
+        compose.onNodeWithText("3 days").assertExists()
+        controls().onLast().performClick()
+        assertEquals(3, value)
+        controls().onFirst().performClick()
+        compose.onNodeWithText("2 days").assertExists()
+    }
+
+    @Test fun recordingAndSnapshotNetworkFailuresAreReportedWithoutClaimingSuccess() {
+        backend(); cameraHome(); postFailure = true; snapshotFailure = true
+        show("LIVE") { CameraCard(feeder, st) }
+        compose.onNodeWithContentDescription("Record a clip").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it == "Couldn't start recording: service denied" } }
+        compose.onNodeWithContentDescription("Take a snapshot").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it == "Couldn't take a snapshot: snapshot offline" } }
+        assertTrue(pictures.isEmpty())
+    }
+
+    @Test fun snapshotStorageFailureDoesNotClaimThePictureWasSaved() {
+        backend(); cameraHome(); saveFailure = Exception("storage full")
+        show("LIVE") { CameraCard(feeder, st) }
+        compose.onNodeWithContentDescription("Unmute").performClick()
+        compose.onNodeWithContentDescription("Mute").assertExists()
+        compose.onNodeWithContentDescription("Take a snapshot").performClick()
+        compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it == "Couldn't save the snapshot: storage full" } }
+        assertFalse(messages.contains("Snapshot saved to Photos"))
+    }
+
+    @Test fun sparseFountainSettingsRetainMaintenanceFirmwareAndCalibrationPaths() {
+        backend()
+        val sparse = fountain.copy(e = mapOf("weight_calibration_error" to Entity("binary_sensor.calibration", "on", JsonObject(emptyMap()))), firmware = null)
+        show("Settings") { FountainSettingsScreen(sparse, UiState()) }
+        for (label in listOf("Filter", "Cleaning", "Firmware Settings")) {
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close").performClick()
+        }
+        compose.onNodeWithText("Calibration").performScrollTo().performClick()
+        compose.onNodeWithText("The last calibration failed.").assertExists()
+    }
+
+    @Test fun maintenanceResetIsExplicitAndWorksWithoutOptionalCycleEntities() {
+        backend()
+        var dismissed = false
+        show("CLEANING") { MaintenanceSheet(fountain.copy(e = emptyMap()), "cleaning") { dismissed = true } }
+        compose.onNodeWithText("14 days").assertExists()
+        assertTrue(requests.isEmpty())
+        compose.onNodeWithText("Reset (I cleaned it)").performClick()
+        assertTrue(dismissed)
+    }
+
+    @Test fun accountLinksOpenTheConfiguredHomeAndDocumentedHelpDestinations() {
+        settings.putString("ha_url", "https://home.example")
+        show("My Pet") { MeTab(st) }
+        for (label in listOf("Home Assistant", "PETLIBRO integration", "Help, bugs and new devices", "Buy me a coffee")) {
+            compose.onNodeWithText(label).performScrollTo().performClick()
+        }
+        assertEquals(listOf("https://home.example", INTEGRATION_URL, "$REPO_URL/issues", DONATE_URL), urls)
+    }
+
+    @Test fun sparseLinkedDeviceDataDoesNotInventFoodWaterOrWeightMeasurements() {
+        Repo.setFeature(Feature.CAT_INSIGHTS, false)
+        val pet = st.home!!.pets.first()
+        val sparsePet = pet.copy(e = pet.e.filterKeys { it == "boundDeviceNums" })
+        val sparse = st.copy(home = st.home!!.copy(pets = listOf(sparsePet), devices = st.home!!.devices.map { it.copy(e = emptyMap()) }), logs = Logs())
+        show("Dashboard") { CareTab(sparse) }
+        compose.onNodeWithText("--").assertExists()
+        compose.onAllNodesWithText("0").onFirst().assertExists()
+        compose.onAllNodesWithText("View 7-Day Trend").onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("Average 0 g a day").assertExists()
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.onAllNodesWithText("View 7-Day Trend").onLast().performScrollTo().performClick()
+        compose.onNodeWithText("Average 0 ml a day").assertExists()
+    }
+
+    @Test fun missingRecognizerStatisticsExplainSetupWhenInsightsAreEnabled() {
+        val demo = FakeHomeAssistant(read = { java.io.File("src/commonMain/composeResources/$it").readBytes() })
+        Repo.javaClass.getDeclaredField("ha").apply { isAccessible = true }.set(Repo, object : HaBackend by demo {
+            override suspend fun get(path: String): String = if (path.endsWith(STATS_SENSOR)) throw ApiException("No stats helper") else demo.get(path)
+        })
+        show("Dashboard") { CareTab(st) }
+        compose.onNodeWithText("Cat Insights is on, but there are no statistics yet:", substring = true).performScrollTo().assertExists()
+    }
+
+    @Test fun careWithNoConnectionKeepsItsMissingStatisticsExplicit() {
+        Repo.logout()
+        Repo.setFeature(Feature.CAT_INSIGHTS, true)
+        show("Dashboard") { CareTab(st) }
+        compose.onNodeWithText("Cat Insights is on, but there are no statistics yet:", substring = true).performScrollTo().assertExists()
+    }
+
+    @Test fun unlinkedPetsDoNotInheritOtherDevicesMeasurements() {
+        backend()
+        val pet = st.home!!.pets.first().copy(e = emptyMap())
+        val state = st.copy(home = st.home!!.copy(pets = listOf(pet)))
+        show("Dashboard") { CareTab(state) }
+        compose.onAllNodesWithText("0").onFirst().assertExists()
+        compose.onNodeWithText("Food Intake").assertExists()
+    }
+
+    @Test fun emptySexAndUnneuteredMetadataRemainReadable() {
+        val p = st.home!!.pets.first().copy(e = mapOf("gender" to Entity("sensor.sex", "", JsonObject(emptyMap())), "sterilization" to Entity("binary_sensor.neutered", "off", JsonObject(emptyMap()))))
+        show("Profile") { PetScreen(p, st) }
+        compose.onNodeWithText("Not neutered").performScrollTo().assertExists()
+    }
+
+    @Test fun rootRoutesCameraAndClipPagesAndBackToTheDeviceList() {
+        backend(); cameraHome()
+        show("Device") { Root() }
+        compose.runOnIdle { Nav.go(Screen.CameraFull(feeder.serial)) }
+        compose.onNodeWithText(feeder.name).assertExists()
+        compose.onAllNodes(hasClickAction()).onLast().performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onAllNodesWithText("Device").onLast().assertExists()
+        compose.runOnIdle { Nav.go(Screen.Clip(feeder.serial, "test-clip", "Recorded clip")) }
+        compose.onNodeWithText("Recorded clip").assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onAllNodesWithText("Device").onLast().assertExists()
+    }
+
+    @Test fun logsCanCollapseAndReopenTheirDaysWithoutLosingEvents() {
+        val at = Clock.System.now()
+        val state = st.copy(logs = Logs(feeds = mapOf(feeder.serial to listOf(LogEntry(at, "Test feeding")))))
+        show("Logs") { LogsScreen(feeder, state) }
+        compose.onNodeWithText("Test feeding").assertExists()
+        compose.onNodeWithText("Today").performClick()
+        compose.onNodeWithText("Test feeding").assertDoesNotExist()
+        compose.onNodeWithText("Today").performClick()
+        compose.onNodeWithText("Test feeding").assertExists()
+    }
+
+    @Test fun logPreviewCanCollapseAndReopen() {
+        val at = Clock.System.now()
+        show("Logs") { LogsCard(listOf(LogEntry(at, "Preview feeding"))) {} }
+        compose.onNodeWithText("Preview feeding").assertExists()
+        compose.onNodeWithText("Logs").performClick()
+        compose.onNodeWithText("Preview feeding").assertDoesNotExist()
+        compose.onNodeWithText("Logs").performClick()
+        compose.onNodeWithText("Preview feeding").assertExists()
+    }
+
+    @Test fun emptyFeederLogsExplainTheRecorderBoundary() {
+        show("Logs") { LogsScreen(feeder, UiState()) }
+        compose.onNodeWithText("No logs yet. Logs start from when Home Assistant began recording this device.").assertExists()
+    }
+
+    @Test fun firmwareUpdateAvailableIsDistinctFromAlreadyUpToDate() {
+        val update = feeder.copy(e = feeder.e + ("firmware" to Entity("update.feeder", "on", JsonObject(emptyMap()))))
+        show("Update available") { FirmwareSheet(update) {} }
+    }
+
+    @Test fun deviceInformationKeepsUnavailableValuesExplicit() {
+        val sparse = feeder.copy(room = null, firmware = null, e = emptyMap())
+        show("About Device") { AboutScreen(sparse) }
+        compose.onAllNodesWithText("--").assertCountEquals(4)
+    }
+
+    @Test fun sparseFeederSettingsCanOpenFirmwareAndReadOnlyCameraDetails() {
+        backend()
+        Feature.entries.forEach { Repo.setFeature(it, false) }
+        val sparse = feeder.copy(room = null, firmware = null, e = mapOf("resolution" to Entity("sensor.resolution", "unknown", JsonObject(emptyMap()))))
+        show("Settings") { FeederSettingsScreen(sparse) }
+        for (label in listOf("Desiccant Bag", "Camera Settings", "Firmware Settings")) {
+            compose.onNodeWithText(label).performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close").performClick()
+        }
     }
 
     @Test fun teachingExplainsWhenAllClipsAreLabelled() {

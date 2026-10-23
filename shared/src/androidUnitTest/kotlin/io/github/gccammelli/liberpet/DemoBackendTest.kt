@@ -49,4 +49,54 @@ class DemoBackendTest {
         assertFailsWith<ApiException> { demo.post("/api/services/petlibro/feed", "{}") }
         assertFailsWith<ApiException> { demo.ws(listOf(buildJsonObject { put("type", "not-implemented") })) }
     }
+
+    @Test fun malformedOrMissingSettingTargetsDoNotChangeOtherDemoEntities() = runBlocking {
+        val demo = demo()
+        val before = demo.get("/api/states")
+        for ((service, body) in listOf(
+            "switch/turn_on" to "{}", "switch/turn_off" to """{"entity_id":"switch.missing"}""",
+            "number/set_value" to "{}", "select/select_option" to "{}",
+            "button/press" to "{}", "button/press" to """{"entity_id":"button.unrelated"}""",
+            "button/press" to """{"entity_id":"button.missing_turn_on_indicator"}""",
+        )) assertEquals("[]", demo.post("/api/services/$service", body))
+        assertEquals(before, demo.get("/api/states"))
+        for (ids in listOf<JsonElement?>(null, JsonArray(emptyList()))) {
+            val result = demo.ws(listOf(buildJsonObject { put("type", "recorder/statistics_during_period"); ids?.let { put("statistic_ids", it) } }))
+            assertEquals(30, result.single()!!.jsonObject.getValue("").jsonArray.size)
+        }
+    }
+
+    @Test fun emptyDemoSchedulesRetainExplicitZerosAndProvideFallbackInsights() = runBlocking {
+        val raw = json.parseToJsonElement(java.io.File("src/commonMain/composeResources/files/demo/home.json").readText()).jsonObject
+        val states = raw.getValue("states").jsonArray.map { entry ->
+            val e = entry.jsonObject
+            if (e.s("entity_id")!!.endsWith("_feeding_schedule")) JsonObject(e + ("attributes" to buildJsonObject { put("schedule", JsonArray(emptyList())) })) else e
+        }
+        val snapshot = JsonObject(raw + ("states" to JsonArray(states)))
+        val backend = FakeHomeAssistant(now = { Instant.parse("2026-01-01T00:00:00Z") }, read = { snapshot.toString().encodeToByteArray() })
+        val home = backend.loadHome()
+        val feeder = home.devices.first { it.isFeeder }
+        assertTrue(feeder.plans.isEmpty())
+        assertEquals(0.0, feeder.num("today_feeding_times"))
+        assertEquals(0.0, feeder.num("today_feeding_quantity_weight"))
+        assertEquals(emptyList(), parseActivity(json.parseToJsonElement(backend.get("/api/states/${feeder.e.getValue("recent_activity").id}")).jsonObject.o("attributes")!!))
+        assertEquals(30, parseCatDays(backend.get("/api/states/$STATS_SENSOR")).size)
+    }
+
+    @Test fun optionalPlanNumbersDefaultWithoutPreventingDemoHistory() = runBlocking {
+        val raw = json.parseToJsonElement(java.io.File("src/commonMain/composeResources/files/demo/home.json").readText()).jsonObject
+        val states = raw.getValue("states").jsonArray.map { entry ->
+            val e = entry.jsonObject
+            if (e.s("entity_id")!!.endsWith("_feeding_schedule")) JsonObject(e + ("attributes" to buildJsonObject {
+                put("schedule", buildJsonArray { add(buildJsonObject { put("time", "08:00"); put("enabled", true) }) })
+            })) else e
+        }
+        val snapshot = JsonObject(raw + ("states" to JsonArray(states)) + ("ignored_extra" to JsonPrimitive("2026-99-99T08:00:00Z")))
+        val backend = FakeHomeAssistant(now = { Instant.parse("2026-01-01T20:00:00Z") }, read = { snapshot.toString().encodeToByteArray() })
+        val feeder = backend.loadHome().devices.first { it.isFeeder }
+        val records = parseActivity(json.parseToJsonElement(backend.get("/api/states/${feeder.e.getValue("recent_activity").id}")).jsonObject.o("attributes")!!)
+        assertEquals(3, records.size)
+        assertTrue(records.all { it.portions == 1.0 && it.planId == 0L })
+        assertEquals(10.0, feeder.num("today_feeding_quantity_weight"))
+    }
 }
