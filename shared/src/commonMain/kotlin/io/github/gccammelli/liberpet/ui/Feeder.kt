@@ -267,8 +267,7 @@ fun BigStat(value: String, unit: String, label: String, modifier: Modifier) = Co
  * Today's state: "Completed"/"Skipped"/"Failed" once its time has passed, else null (upcoming, shown as an on/off switch).
  * A plan whose time hasn't come yet is upcoming whatever the cloud says (its "today" lags just after midnight).
  */
-private fun pastStatus(p: Plan): String? {
-    val now = Clock.System.now().local().time.let { it.hour * 60 + it.minute }
+internal fun pastStatus(p: Plan, now: Int): String? {
     if (minutesOf(p.time) > now) return null
     return when (p.todayState) {
         "dispensed" -> "Completed"
@@ -279,10 +278,10 @@ private fun pastStatus(p: Plan): String? {
 }
 
 @Composable
-fun TodaySchedule(d: Device) {
+fun TodaySchedule(d: Device, now: Int = Clock.System.now().local().time.let { it.hour * 60 + it.minute }) {
     val err = errorToast()
     val today = d.plans.filter { it.todayState != null && it.enabled }.sortedBy { minutesOf(it.time) }
-    val upcoming = today.filter { pastStatus(it) == null }
+    val upcoming = today.filter { pastStatus(it, now) == null }
     Card(padding = PaddingValues(horizontal = 24.dp, vertical = 22.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             T("Today's Schedule", 18.sp, weight = FontWeight.Medium, modifier = Modifier.weight(1f))
@@ -294,7 +293,7 @@ fun TodaySchedule(d: Device) {
         if (today.isEmpty()) T("No feeding plans today", 15.sp, C.Faint, modifier = Modifier.padding(vertical = 10.dp))
         today.forEach { p ->
             Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
-            val status = pastStatus(p)
+            val status = pastStatus(p, now)
             Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
                 T(p.time, 20.sp, if (status != null) C.Faint else C.Text, modifier = Modifier.width(86.dp))
                 T("${fmt(p.grams)}g", 18.sp, if (status != null) C.Faint else C.Text, modifier = Modifier.weight(1f))
@@ -457,7 +456,7 @@ fun AmountSheet(title: String, portions: Int, step: Int, onDismiss: () -> Unit, 
 @Composable
 private fun RoundStep(icon: ImageVector, onClick: () -> Unit) =
     Box(Modifier.size(46.dp).clip(CircleShape).background(C.Card).border(1.dp, C.Line, CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, Modifier.size(22.dp), tint = C.Text)
+        Icon(icon, if (icon == Icons.Default.Add) "Increase" else "Decrease", Modifier.size(22.dp), tint = C.Text)
     }
 
 // ---------- Schedule ----------

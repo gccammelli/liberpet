@@ -185,7 +185,7 @@ private fun ClipCard(c: Clip, who: String?, onClick: () -> Unit) = Column(Modifi
 }
 
 /** "Left: Name · Right: Name" from the recognizer, for clips it has named cats in. */
-private fun whoAte(c: Clip, cats: io.github.gccammelli.liberpet.Cats?, st: UiState): String? {
+internal fun whoAte(c: Clip, cats: io.github.gccammelli.liberpet.Cats?, st: UiState): String? {
     val sides = cats?.clips?.get("${c.day}/${c.video.substringAfterLast('/').removeSuffix(".mp4")}") ?: return null
     fun name(id: String?) = id?.let { i -> st.home?.pets?.firstOrNull { it.id == i }?.name }
     val l = name(sides["left"]); val r = name(sides["right"])

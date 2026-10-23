@@ -181,7 +181,7 @@ fun Stepper(label: String, value: Int, unit: String, min: Int, max: Int, onChang
 @Composable
 fun StepCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, size: androidx.compose.ui.unit.Dp = 36.dp, onClick: () -> Unit) =
     Box(Modifier.size(size).clip(CircleShape).background(color).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, Modifier.size(size * .6f), tint = Color.White)
+        Icon(icon, if (icon == Icons.Default.Add) "Increase" else "Decrease", Modifier.size(size * .6f), tint = Color.White)
     }
 
 @Composable

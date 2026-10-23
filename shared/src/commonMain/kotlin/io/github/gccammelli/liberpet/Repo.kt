@@ -45,8 +45,9 @@ object Repo {
     }
 
     /** Checks the address and token by loading once; saves them only if that works. */
-    suspend fun connect(url: String, token: String) {
-        val b = HaHttp(url, token.filterNot { it.isWhitespace() })
+    suspend fun connect(url: String, token: String) = connect(HaHttp(url, token.filterNot { it.isWhitespace() }), token)
+
+    internal suspend fun connect(b: HaBackend, token: String) {
         val home = withContext(Dispatchers.Default) { b.loadHome() }
         if (home.devices.isEmpty() && home.pets.isEmpty())
             throw ApiException("Connected, but Home Assistant has no PETLIBRO devices. Add the PETLIBRO integration there first.")
