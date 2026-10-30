@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "io.github.gccammelli.liberpet"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.gccammelli.liberpet" + if (providers.gradleProperty("liberpet.testbed").isPresent) ".testbed" else ""

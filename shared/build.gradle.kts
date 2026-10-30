@@ -60,7 +60,7 @@ kotlin {
 
 android {
     namespace = "io.github.gccammelli.liberpet.shared"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig { minSdk = 26 }
     testOptions.unitTests.isIncludeAndroidResources = true
     compileOptions {
