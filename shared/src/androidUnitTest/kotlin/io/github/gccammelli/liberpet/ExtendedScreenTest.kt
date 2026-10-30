@@ -1098,6 +1098,7 @@ class ExtendedScreenTest {
         compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it.startsWith("To record, add") } }
         streamFailure=false
         compose.onNodeWithText("Tap to try again").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("The camera didn't answer").fetchSemanticsNodes().isEmpty() }
         compose.onAllNodesWithText("The camera didn't answer").assertCountEquals(0)
     }
 
