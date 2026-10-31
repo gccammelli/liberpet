@@ -33,7 +33,8 @@ class ExtendedScreenTest {
     private val urls = mutableListOf<String>()
     private val pictures = mutableListOf<ByteArray>()
     private val requests = java.util.concurrent.ConcurrentLinkedQueue<Pair<String,String>>()
-    private var streamFailure = false
+    private val streamRequests = java.util.concurrent.ConcurrentLinkedQueue<Boolean>()
+    @Volatile private var streamFailure = false
     private var postFailure = false
     private var snapshotFailure = false
     private var saveFailure: Throwable? = null
@@ -314,6 +315,7 @@ class ExtendedScreenTest {
             override suspend fun ws(commands: List<JsonObject>): List<JsonElement?> = commands.map { c ->
                 when(c.s("type")) {
                     "camera/stream" -> {
+                        streamRequests.add(streamFailure)
                         if(streamFailure) throw ApiException("Camera offline")
                         buildJsonObject { put("url","file:///nonexistent-liberpet-camera.mp4") }
                     }
@@ -1097,8 +1099,10 @@ class ExtendedScreenTest {
         compose.onNodeWithContentDescription("Record a clip").performClick()
         compose.waitUntil(5000) { compose.waitForIdle(); messages.any { it.startsWith("To record, add") } }
         streamFailure=false
-        compose.onNodeWithText("Tap to try again").performClick()
-        compose.onAllNodesWithText("The camera didn't answer").assertCountEquals(0)
+        compose.onNodeWithText("Tap to try again").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        // The fake URL cannot play, so the player may immediately show an error again.
+        // Verify that retry actually requests a fresh stream after the backend recovers.
+        compose.waitUntil(5000) { compose.waitForIdle(); streamRequests.contains(false) }
     }
 
     @Test fun fullScreenCameraReturnsToPriorScreen() {

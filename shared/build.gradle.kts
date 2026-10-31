@@ -13,7 +13,7 @@ kotlin {
     }
     // iOS only where it's used: macOS (CI) or on request (-Pliberpet.ios, to type-check iOS code on Linux).
     val ios = System.getProperty("os.name").startsWith("Mac") || providers.gradleProperty("liberpet.ios").isPresent
-    if (ios) listOf(iosArm64(), iosX64(), iosSimulatorArm64()).forEach {
+    if (ios) listOf(iosArm64(), iosSimulatorArm64()).forEach {
         it.binaries.framework {
             baseName = "Shared"
             isStatic = true
@@ -60,7 +60,7 @@ kotlin {
 
 android {
     namespace = "io.github.gccammelli.liberpet.shared"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig { minSdk = 26 }
     testOptions.unitTests.isIncludeAndroidResources = true
     compileOptions {
