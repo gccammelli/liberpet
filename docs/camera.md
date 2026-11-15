@@ -1,11 +1,33 @@
 # Live camera (Granary Smart Camera Feeder, PLAF203)
 
-The PETLIBRO integration doesn't provide video. The feeder's camera uses TUTK/Kalay, a peer-to-peer video
-service, and the cloud API has no RTSP, HLS or WebRTC stream. This page describes a local setup that works
-with stock firmware, so it can be repeated or revisited.
+The PETLIBRO integration provides a camera entity starting with version 1.4. Its video travels over your local
+network using a separate go2rtc process; feeder controls still use the Petlibro cloud. This page also preserves
+the standalone go2rtc setup, which works with stock firmware.
 
-**Status:** working on 2026-10-15. Tested on a PLAF203 with firmware 3.1.54, hardware 1.0.7: 1080p H.264 with
-AAC audio, over the home network only. The feeder, the official app and the cloud keep working as before.
+**Status:** the standalone setup was tested on 2026-10-15 on a PLAF203 with firmware 3.1.54, hardware 1.0.7:
+1080p H.264 with AAC audio. The integration's camera (v1.4) was tested on 2026-11-15 on the same feeder, with no
+extra settings: 1080p H.264 at 25 fps with AAC audio, through the same Home Assistant HLS stream LiberPet plays.
+
+## Recommended: PETLIBRO integration camera
+
+1. Update the [PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) to version 1.4 or later and
+   restart Home Assistant. A PLAF203 on the account should get a camera entity automatically.
+2. Open that camera in Home Assistant. If it cannot find the feeder, reserve the feeder's IP in your router and
+   enter it under Settings → Devices & services → PETLIBRO → Configure → Integration settings →
+   **Camera Feeder IP Address**. Home Assistant must be able to reach UDP port 32761 on the feeder.
+3. In LiberPet, open the feeder. The app selects a camera in the same Home Assistant area, or you can choose it
+   under the feeder's Settings → Live Camera.
+
+The integration downloads a pinned, checksum-verified go2rtc build and runs it on the Home Assistant host.
+It can discover the feeder on the local subnet, use a device tracker reporting its MAC, or use the configured IP.
+See the [integration's camera guide](https://github.com/jjjonesjr33/petlibro/blob/v1.4/docs/camera-stream.md)
+for supported architectures, settings and troubleshooting. The helper listens on the host's loopback interface;
+the integration offers a **Custom Camera Stream URL** setting if you prefer your own bridge.
+
+The feeder allows roughly one live viewer session at a time, so opening a stream in one app can interrupt another.
+If you also run the standalone setup below (for example for the recorder), opening the integration's camera takes
+the feeder away from it until Home Assistant closes the idle stream, about two minutes in testing.
+The firmware may still require its normal cloud connection to accept local viewing sessions.
 
 ## How it works
 
@@ -14,7 +36,8 @@ feeder camera ──(local network, UDP)──▶ go2rtc with PETLIBRO support �
 ```
 
 - **[go2rtc](https://github.com/AlexxIT/go2rtc)** is the streaming tool Home Assistant uses internally.
-- **[mkaand/go2rtc](https://github.com/mkaand/go2rtc)**, branch `petlibro-plaf203-v2`, is an open-source fork. It
+- The integration's automatic camera uses [tannerln7/go2rtc](https://github.com/tannerln7/go2rtc). The standalone
+  instructions below use **[mkaand/go2rtc](https://github.com/mkaand/go2rtc)**, branch `petlibro-plaf203-v2`. It
   adds a `petlibro://` source that talks to the feeder directly on the local network and outputs a standard
   RTSP/WebRTC stream. It needs no firmware change, no cloud, and no DNS or MQTT changes.
 - **Home Assistant** shows that stream as an ordinary camera entity.
@@ -22,7 +45,7 @@ feeder camera ──(local network, UDP)──▶ go2rtc with PETLIBRO support �
   works wherever Home Assistant works. It uses the camera in the feeder's area, or the one picked in the feeder's
   Settings → Live Camera.
 
-## What you need
+## Standalone setup: what you need
 
 - **The feeder's IP address,** fixed with a DHCP reservation in your router so it doesn't change. To find it,
   look up the feeder's MAC address (Petlibro app → feeder → Settings → device card → MAC Address) in your
@@ -104,7 +127,7 @@ Then give the new camera **the same area as the feeder**, so LiberPet links them
 If Home Assistant runs in a virtual machine on the same computer as go2rtc, use the address the VM uses to reach
 that computer, and let go2rtc's RTSP listen only there. The web page (`api`) can stay on `127.0.0.1`.
 
-## 6. Recordings (optional)
+## Recordings (optional)
 
 LiberPet's gallery plays clips that its recorder saves outside Home Assistant:
 
@@ -121,10 +144,11 @@ go2rtc ──▶ recorder ──▶ folder (capped, e.g. 128 GB) ──NFS, read
   timeline of the day with feedings marked, then thumbnails with why each clip was recorded, and plays clips with a
   scrubber.
 
-Setup and every option: [tools/recorder/README.md](../tools/recorder/README.md). With the recorder running, live
-view also starts at once, because the camera session stays open.
+Setup and every option: [tools/recorder/README.md](../tools/recorder/README.md). The recorder needs an accessible
+stream URL; the integration's managed go2rtc listens on loopback, so an external recorder cannot directly use its
+RTSP endpoint. With the recorder running, live view also starts at once, because the camera session stays open.
 
-## Limitations
+## Standalone setup limitations
 
 - **It's a beta,** validated only on firmware 3.1.54. Other firmware or models may not work.
 - **Short glitches:** losing several packets in a row can cause about a second of artefacts.
@@ -141,12 +165,11 @@ view also starts at once, because the camera session stays open.
 - **The cloud route:** the integration exposes the cloud camera credentials (`camera_auth_info`,
   `tutk_user_token`, `tutk_app_url`). No open-source client can use them yet, and using Petlibro's own TUTK
   libraries isn't an option for an open-source app.
-- **[tannerln7/ha-addon-petlibro-local](https://github.com/tannerln7/ha-addon-petlibro-local)** also streams
-  through go2rtc. But it replaces the feeder's cloud connection with a local MQTT broker, runs only on x86
-  machines, and was tested on firmware 3.1.48. It's a fallback if the fork stops working.
+- **[Petlibro Local](https://github.com/tannerln7/Petlibro-Home-Assistant)** provides local feeder control as well
+  as camera streaming. Its experimental installation redirects the feeder's MQTT connection to a local broker and
+  installs a feeder-side State Agent. LiberPet does not currently support its MQTT feeder entities for controls.
 
 ## Later
 
-- **No extra setup for anyone:** if the `petlibro://` source is merged into the main go2rtc project, Home
-  Assistant's built-in go2rtc would support the feeder directly. The PETLIBRO integration could then create
-  the camera entity itself from the UID it already has. Worth suggesting to both projects.
+- If the `petlibro://` source is merged into the main go2rtc project, Home Assistant's built-in go2rtc could
+  potentially support the feeder without a separate helper.

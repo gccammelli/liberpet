@@ -33,7 +33,7 @@ Not ready to connect anything? Open the app and tap **Try the demo**.
 ## What you need
 
 - **Home Assistant**, with the community [PETLIBRO integration](https://github.com/jjjonesjr33/petlibro) (from HACS)
-  signed in to a Petlibro account.
+  signed in to a Petlibro account. Version 1.4 or later adds the feeder's live camera.
 - **A PETLIBRO feeder or fountain.** Tested with the Granary Smart Camera Feeder (PLAF203) and Dockstream Smart
   Fountains (PLWF105); other models the integration supports should mostly work.
 - **For the optional extras:** a computer at home that's always on (see [Optional extras](#optional-extras)).
@@ -45,15 +45,15 @@ LiberPet talks only to **your Home Assistant**. Home Assistant does the rest:
 ```
 LiberPet ──▶ your Home Assistant ──▶ Petlibro's cloud ──▶ feeder / fountains   (status, logs, controls)
                        │
-                       └──▶ go2rtc on your network ──▶ feeder camera            (live view, local only)
+                       └──▶ go2rtc (run by the integration) ──▶ feeder camera  (live view, local only)
 ```
 
 - **Device data and controls need Petlibro's cloud.** Home Assistant reaches it through the PETLIBRO integration.
   The devices stay connected to Petlibro's cloud, and every status update, log and command goes through it. If the
   cloud or your internet is down, Home Assistant can't read or control the devices. Scheduled meals still dispense,
   because the schedule is stored on the feeder.
-- **The camera is local.** Its video goes straight from the feeder to go2rtc on your network, then to Home
-  Assistant, and never through Petlibro's servers. Setup: [docs/camera.md](docs/camera.md).
+- **The camera is local.** Its video goes straight from the feeder to go2rtc, which the integration runs on your
+  Home Assistant host, and never through Petlibro's servers. Details: [docs/camera.md](docs/camera.md).
 - **Pet photos** come through Home Assistant too, from the integration's image entities.
 
 Petlibro allows one login per account. Give Home Assistant a second Petlibro account and share your devices
@@ -66,7 +66,9 @@ with it, so the official app can stay signed in on your main account.
    profile › Security › Long-lived access tokens). Away from home, use an address that works from outside, such as
    your Home Assistant Cloud address or your own HTTPS domain.
    Use a dedicated non-administrator Home Assistant user for the app's token; it can do whatever that user can.
-3. **Optional:** the live camera ([docs/camera.md](docs/camera.md)) and the [extras](#optional-extras).
+3. **Live camera:** with integration 1.4 or later it appears on its own; if it can't find the feeder, see
+   [docs/camera.md](docs/camera.md).
+4. **Optional:** the [extras](#optional-extras).
 
 ## What works
 
