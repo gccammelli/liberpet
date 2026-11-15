@@ -103,6 +103,17 @@ class ScreenTest {
     @Test fun newPlanHasSaveAction() = show("Save") { PlanEditScreen(feeder, null) }
     @Test fun existingPlanHasDeleteAction() = show("DELETE") { PlanEditScreen(feeder, feeder.plans.first()) }
     @Test fun feederSettingsExplainCameraChoice() = show("Settings") { FeederSettingsScreen(feeder) }
+    @Test fun cameraChoicesRemainReachableWithManyCameras() {
+        Repo.state.value = st.copy(home = st.home!!.copy(cameras = (1..25).map { Camera("camera.$it", "Camera $it", null) }))
+        show("Settings") { FeederSettingsScreen(feeder) }
+        compose.onNodeWithText("Live Camera").performScrollTo().performClick()
+        try {
+            compose.onNodeWithText("Camera 25").performScrollTo().assertIsDisplayed().performClick()
+            assertEquals("camera.25", Repo.cameraFor(feeder, Repo.state.value.home!!)!!.id)
+        } finally {
+            Repo.setCamera(feeder, null) // the choice is persisted; later tests expect the default
+        }
+    }
     @Test fun fountainSettingsShowSettings() = show("Settings") { FountainSettingsScreen(fountain, st) }
     @Test fun waterHistoryShowsChart() = show("WATER INTAKE") { WaterIntakeScreen(fountain, st) }
     @Test fun goalShowsWaterTarget() = show("Daily Hydration Goal") { GoalScreen(fountain, st) }
