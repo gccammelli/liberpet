@@ -659,11 +659,13 @@ fun FeederSettingsScreen(d: Device) {
         "firmware" -> FirmwareSheet(d) { sheet = null }
         "livecam" -> Sheet({ sheet = null }, "LIVE CAMERA", confirm = null) {
             val cams = Repo.state.value.home?.cameras.orEmpty()
-            Radio(false, "Automatic (the camera in the feeder's area)") { Repo.setCamera(d, null); Repo.refresh(); sheet = null }
-            cams.forEach { c -> Radio(false, c.name + (c.area?.let { " · $it" } ?: "")) { Repo.setCamera(d, c.id); Repo.refresh(); sheet = null } }
-            Radio(false, "None") { Repo.setCamera(d, ""); Repo.refresh(); sheet = null }
-            if (cams.isEmpty()) T("No cameras in Home Assistant yet. See LiberPet's docs/camera.md.", 13.sp, C.Faint, modifier = Modifier.padding(vertical = 8.dp))
-            Gap(20.dp)
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Radio(false, "Automatic (the camera in the feeder's area)") { Repo.setCamera(d, null); Repo.refresh(); sheet = null }
+                cams.forEach { c -> Radio(false, c.name + (c.area?.let { " · $it" } ?: "")) { Repo.setCamera(d, c.id); Repo.refresh(); sheet = null } }
+                Radio(false, "None") { Repo.setCamera(d, ""); Repo.refresh(); sheet = null }
+                if (cams.isEmpty()) T("No cameras in Home Assistant yet. See LiberPet's docs/camera.md.", 13.sp, C.Faint, modifier = Modifier.padding(vertical = 8.dp))
+                Gap(20.dp)
+            }
         }
     }
 }
