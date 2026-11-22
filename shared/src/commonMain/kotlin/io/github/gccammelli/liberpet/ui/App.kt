@@ -131,6 +131,7 @@ fun Root() {
     if (home == null) return Box(Modifier.fillMaxSize().background(C.Bg), contentAlignment = Alignment.Center) {
         if (st.error != null) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             T(st.error!!, 15.sp, C.Sub); Gap(16.dp); DarkButton("Retry") { Repo.refresh() }
+            Gap(8.dp); T("Change address", 14.sp, C.Blue, modifier = Modifier.clickable { Repo.logout() }.padding(12.dp))
         } else CircularProgressIndicator(color = C.Green)
     }
     fun dev(sn: String) = home.devices.firstOrNull { it.serial == sn }
