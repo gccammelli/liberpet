@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.gccammelli.liberpet" + if (providers.gradleProperty("liberpet.testbed").isPresent) ".testbed" else ""
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     buildTypes {
